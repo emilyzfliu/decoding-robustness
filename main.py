@@ -15,7 +15,7 @@ def run():
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
 
-    texts = load_eval_dataset(n_samples=10, rng=rng, perturb_pct=0)
+    texts = load_eval_dataset(rng=rng, n_samples=10,perturb_pct=0)
 
     inputs = tokenizer(texts, return_tensors="pt", padding=True)
 
