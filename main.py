@@ -6,6 +6,7 @@ import argparse
 import string
 
 from src.perturbs import perturb
+from src.eval import eval_loop
 
 def run(args):
     ptb_type = args.ptb_type
@@ -28,7 +29,9 @@ def run(args):
     texts = [x for x in texts if len(x.split()) > 20]
 
     if args.debug:
-        texts = [texts[0]]
+        texts = texts[:2]
+    
+    # print(texts)
 
     if ptb_type == 'char':
         sub_pool = string.ascii_letters + string.digits + string.punctuation
@@ -44,7 +47,7 @@ def run(args):
     inputs_perturbed = tokenizer(texts_perturbed, return_tensors="pt", padding=True)
 
     with torch.no_grad():
-        output_ids = model.generate(
+        outputs = model(
             **inputs, 
             max_new_tokens=20,
             pad_token_id=tokenizer.pad_token_id,
@@ -53,7 +56,7 @@ def run(args):
             output_logits=True
         )
 
-        output_ids_perturbed = model.generate(
+        outputs_perturbed = model(
             **inputs_perturbed, 
             max_new_tokens=20,
             pad_token_id=tokenizer.pad_token_id,
@@ -62,12 +65,9 @@ def run(args):
             output_logits=True
         )
     
-    
-    # Decode results
-    outs = tokenizer.batch_decode(output_ids.sequences, skip_special_tokens=True)
+    res = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, model)
 
-    for out in outs:
-        print('SAMPLE:', out)
+    print(res)
 
 
 if __name__ == "__main__":
