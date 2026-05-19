@@ -11,6 +11,7 @@ from src.perturbs import perturb
 from src.eval import eval_loop
 
 def run(args):
+    SEQ_LEN = 128 if not args.debug else 5
     ptb_type = args.ptb_type
     ptb_pct = args.ptb_pct
     
@@ -29,12 +30,12 @@ def run(args):
     ds = load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1")
 
     texts = list(ds['test']['text'])
-    texts = [x for x in texts if len(x.split()) > 20]
+    texts = [x for x in texts if len(x.split()) > SEQ_LEN]
 
     if args.debug:
         texts = [
             'Lorem ipsum dolor sit amet',
-            'Hello world!'
+            'Hello world! Hello universe?'
         ]
     
     # print(texts)
@@ -49,8 +50,20 @@ def run(args):
 
     texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, sub_pool)
 
-    inputs = tokenizer(texts, return_tensors="pt", padding=True)
-    inputs_perturbed = tokenizer(texts_perturbed, return_tensors="pt", padding=True)
+    inputs = tokenizer(
+        texts, 
+        return_tensors="pt", 
+        truncation=True,
+        max_length=SEQ_LEN,
+        padding='max_length' 
+    )
+    inputs_perturbed = tokenizer(
+        texts_perturbed, 
+        return_tensors="pt", 
+        truncation=True,
+        max_length=SEQ_LEN,
+        padding='max_length' 
+    )
 
     outputs = model(
         **inputs, 
@@ -65,10 +78,6 @@ def run(args):
     )
     
     res_seq, res_tok = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, model)
-
-    if args.debug:
-        print(res_seq)
-        print(res_tok)
 
     os.makedirs(f'results/{ptb_type}/{ptb_pct}', exist_ok=True)
 
@@ -87,5 +96,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action='store_true')
 
     args = parser.parse_args()
+
+    print('Running with', args)
 
     run(args)
