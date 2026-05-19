@@ -4,6 +4,8 @@ from datasets import load_dataset
 import random 
 import argparse
 import string
+import os
+import pandas as pd
 
 from src.perturbs import perturb
 from src.eval import eval_loop
@@ -16,7 +18,8 @@ def run(args):
     # Set up models
     tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
     model = AutoModelForCausalLM.from_pretrained(
-        "openai-community/gpt2"
+        "openai-community/gpt2",
+        attn_implementation='eager'
     )
 
     # Set up dataset
@@ -29,7 +32,10 @@ def run(args):
     texts = [x for x in texts if len(x.split()) > 20]
 
     if args.debug:
-        texts = texts[:2]
+        texts = [
+            'Lorem ipsum dolor sit amet',
+            'Hello world!'
+        ]
     
     # print(texts)
 
@@ -46,28 +52,31 @@ def run(args):
     inputs = tokenizer(texts, return_tensors="pt", padding=True)
     inputs_perturbed = tokenizer(texts_perturbed, return_tensors="pt", padding=True)
 
-    with torch.no_grad():
-        outputs = model(
-            **inputs, 
-            max_new_tokens=20,
-            pad_token_id=tokenizer.pad_token_id,
-            output_hidden_states=True,
-            return_dict_in_generate=True,
-            output_logits=True
-        )
+    outputs = model(
+        **inputs, 
+        output_hidden_states=True, 
+        output_attentions=True
+    )
 
-        outputs_perturbed = model(
-            **inputs_perturbed, 
-            max_new_tokens=20,
-            pad_token_id=tokenizer.pad_token_id,
-            output_hidden_states=True,
-            return_dict_in_generate=True,
-            output_logits=True
-        )
+    outputs_perturbed = model(
+        **inputs_perturbed,
+        output_hidden_states=True, 
+        output_attentions=True
+    )
     
-    res = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, model)
+    res_seq, res_tok = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, model)
 
-    print(res)
+    if args.debug:
+        print(res_seq)
+        print(res_tok)
+
+    os.makedirs(f'results/{ptb_type}/{ptb_pct}', exist_ok=True)
+
+    res_seq = pd.DataFrame(res_seq)
+    res_tok = pd.DataFrame(res_tok)
+
+    res_seq.to_csv(f'results/{ptb_type}/{ptb_pct}/sequence_evals.csv', index=False)
+    res_tok.to_csv(f'results/{ptb_type}/{ptb_pct}/token_evals.csv', index=False)
 
 
 if __name__ == "__main__":
