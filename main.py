@@ -54,6 +54,8 @@ def run(args):
 
     from tqdm import tqdm
 
+    os.makedirs(f'results/{ptb_type}/{ptb_pct}', exist_ok=True)
+
     for i in tqdm(range(0, len(texts), BATCH_SIZE), desc=f"{ptb_type} pct={ptb_pct}"):
         batch_texts = texts[i:i+BATCH_SIZE]
         batch_texts_perturbed = texts_perturbed[i:i+BATCH_SIZE]

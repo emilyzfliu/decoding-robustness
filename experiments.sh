@@ -1,4 +1,4 @@
-python main.py --ptb-type 'char' --ptb-pct 0
+# python main.py --ptb-type 'char' --ptb-pct 0
 python main.py --ptb-type 'char' --ptb-pct 5
 python main.py --ptb-type 'char' --ptb-pct 10
 python main.py --ptb-type 'char' --ptb-pct 15
