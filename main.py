@@ -38,7 +38,6 @@ def run(args):
             'Hello world! Hello universe?'
         ]
     
-    # print(texts)
 
     if ptb_type == 'char':
         sub_pool = string.ascii_letters + string.digits + string.punctuation
@@ -50,42 +49,32 @@ def run(args):
 
     texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, sub_pool)
 
-    inputs = tokenizer(
-        texts, 
-        return_tensors="pt", 
-        truncation=True,
-        max_length=SEQ_LEN,
-        padding='max_length' 
-    )
-    inputs_perturbed = tokenizer(
-        texts_perturbed, 
-        return_tensors="pt", 
-        truncation=True,
-        max_length=SEQ_LEN,
-        padding='max_length' 
-    )
 
-    outputs = model(
-        **inputs, 
-        output_hidden_states=True, 
-        output_attentions=True
-    )
+    BATCH_SIZE = 4
 
-    outputs_perturbed = model(
-        **inputs_perturbed,
-        output_hidden_states=True, 
-        output_attentions=True
-    )
-    
-    res_seq, res_tok = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, model)
+    from tqdm import tqdm
 
-    os.makedirs(f'results/{ptb_type}/{ptb_pct}', exist_ok=True)
-
-    res_seq = pd.DataFrame(res_seq)
-    res_tok = pd.DataFrame(res_tok)
-
-    res_seq.to_csv(f'results/{ptb_type}/{ptb_pct}/sequence_evals.csv', index=False)
-    res_tok.to_csv(f'results/{ptb_type}/{ptb_pct}/token_evals.csv', index=False)
+    for i in tqdm(range(0, len(texts), BATCH_SIZE), desc=f"{ptb_type} pct={ptb_pct}"):
+        batch_texts = texts[i:i+BATCH_SIZE]
+        batch_texts_perturbed = texts_perturbed[i:i+BATCH_SIZE]
+        
+        inputs = tokenizer(batch_texts, return_tensors="pt", 
+                        truncation=True, max_length=128, padding='max_length')
+        inputs_perturbed = tokenizer(batch_texts_perturbed, return_tensors="pt",
+                                    truncation=True, max_length=128, padding='max_length')
+        
+        with torch.no_grad():
+            outputs = model(**inputs, output_hidden_states=True, output_attentions=True)
+            outputs_perturbed = model(**inputs_perturbed, output_hidden_states=True, output_attentions=True)
+        
+        res_seq, res_tok = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, model)
+        
+        pd.DataFrame(res_seq).to_csv(f'results/{ptb_type}/{ptb_pct}/sequence_evals.csv', 
+                                    mode='a', header=(i==0), index=False)
+        pd.DataFrame(res_tok).to_csv(f'results/{ptb_type}/{ptb_pct}/token_evals.csv',
+                                    mode='a', header=(i==0), index=False)
+        
+        del outputs, outputs_perturbed
 
 
 if __name__ == "__main__":
