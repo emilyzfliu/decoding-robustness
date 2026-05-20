@@ -85,13 +85,13 @@ def run(args):
         res_seq = pd.DataFrame(res_seq)
         res_seq = res_seq[~res_seq['sample'].isin(seen)]
         res_seq.to_csv(f'results/{ptb_type}/{ptb_pct}/sequence_evals.csv', 
-                                    mode='a', header=(i==0), index=False)
+                                    mode='a', header=(i==0 and len(seen) == 0), index=False)
         
         
         res_tok = pd.DataFrame(res_tok)
         res_tok = res_tok[~res_tok['sample'].isin(seen)]
         res_tok.to_csv(f'results/{ptb_type}/{ptb_pct}/token_evals.csv',
-                                    mode='a', header=(i==0), index=False)
+                                    mode='a', header=(i==0 and len(seen) == 0), index=False)
         
         del outputs, outputs_perturbed
 
