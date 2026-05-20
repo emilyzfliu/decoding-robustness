@@ -41,11 +41,13 @@ def run(args):
 
     if ptb_type == 'char':
         sub_pool = string.ascii_letters + string.digits + string.punctuation
-    elif ptb_type == 'token':
+    elif ptb_type in ['token', 'noise']:
         sub_pool = [
             token for token in tokenizer.get_vocab() 
             if token not in tokenizer.all_special_tokens
         ]
+    else:
+        sub_pool=None
 
     texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, sub_pool)
 

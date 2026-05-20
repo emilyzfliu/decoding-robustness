@@ -9,7 +9,7 @@ def perturb(texts, perturb_pct, rng, ptb_type, sub_pool):
     elif ptb_type == 'token':
         return token_substitution(texts, perturb_pct, rng, sub_pool)
     elif ptb_type == 'shuffle':
-        return token_shuffle(texts, perturb_pct, rng)
+        return token_shuffle(texts, perturb_pct, rng, sub_pool)
     elif ptb_type == 'noise':
         return token_insertion(texts, perturb_pct, rng, sub_pool)
     else:
@@ -44,21 +44,23 @@ def token_substitution(texts, perturb_pct, rng, sub_pool):
     return ret
 
 
-def token_shuffle(texts, perturb_pct, rng):
+def token_shuffle(texts, perturb_pct, rng, sub_pool):
     """
     Substitute random ASCII characters in the text.
     """
-    toks = texts.split()
-    shuffle_window = int(perturb_pct*len(toks) / 100)
+    ret = []
+    for text in texts:
+        toks = text.split()
+        shuffle_window = int(perturb_pct*len(toks) / 100)
 
-    start = rng.randint(0, len(toks) - shuffle_window - 1)
+        start = rng.randint(0, len(toks) - shuffle_window - 1)
 
-    tok_to_shuffle = toks[start:start+shuffle_window]
-    rng.shuffle(tok_to_shuffle)
+        tok_to_shuffle = toks[start:start+shuffle_window]
+        rng.shuffle(tok_to_shuffle)
 
-    new_toks = toks[:start] + tok_to_shuffle + toks[start+shuffle_window:]
-
-    return ' '.join(new_toks)
+        new_toks = toks[:start] + tok_to_shuffle + toks[start+shuffle_window:]
+        ret.append(' '.join(new_toks))
+    return ret
 
 
 def token_insertion(texts, perturb_pct, rng, sub_pool):
