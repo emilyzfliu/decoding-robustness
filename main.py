@@ -58,6 +58,8 @@ def run(args):
 
     os.makedirs(f'results/{ptb_type}/{ptb_pct}', exist_ok=True)
 
+    seen = set(pd.read_csv(f'results/{ptb_type}/{ptb_pct}/sequence_evals.csv')['sample'])
+
     for i in tqdm(range(0, len(texts), BATCH_SIZE), desc=f"{ptb_type} pct={ptb_pct}"):
         batch_texts = texts[i:i+BATCH_SIZE]
         batch_texts_perturbed = texts_perturbed[i:i+BATCH_SIZE]
@@ -72,10 +74,20 @@ def run(args):
             outputs_perturbed = model(**inputs_perturbed, output_hidden_states=True, output_attentions=True)
         
         res_seq, res_tok = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, model)
+
+        # adjust samples
+
+        res_seq['sample'] = [x+i*4 for x in res_seq['sample']]
         
-        pd.DataFrame(res_seq).to_csv(f'results/{ptb_type}/{ptb_pct}/sequence_evals.csv', 
+        res_seq = pd.DataFrame(res_seq)
+        res_seq = res_seq[~res_seq['sample'].isin(seen)]
+        res_seq.to_csv(f'results/{ptb_type}/{ptb_pct}/sequence_evals.csv', 
                                     mode='a', header=(i==0), index=False)
-        pd.DataFrame(res_tok).to_csv(f'results/{ptb_type}/{ptb_pct}/token_evals.csv',
+        
+        
+        res_tok = pd.DataFrame(res_tok)
+        res_tok = res_tok[~res_tok['sample'].isin(seen)]
+        res_tok.to_csv(f'results/{ptb_type}/{ptb_pct}/token_evals.csv',
                                     mode='a', header=(i==0), index=False)
         
         del outputs, outputs_perturbed
