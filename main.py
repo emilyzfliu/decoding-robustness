@@ -58,7 +58,10 @@ def run(args):
 
     os.makedirs(f'results/{ptb_type}/{ptb_pct}', exist_ok=True)
 
-    seen = set(pd.read_csv(f'results/{ptb_type}/{ptb_pct}/sequence_evals.csv')['sample'])
+    try:
+        seen = set(pd.read_csv(f'results/{ptb_type}/{ptb_pct}/sequence_evals.csv')['sample'])
+    except:
+        seen = set()
 
     for i in tqdm(range(0, len(texts), BATCH_SIZE), desc=f"{ptb_type} pct={ptb_pct}"):
         batch_texts = texts[i:i+BATCH_SIZE]
