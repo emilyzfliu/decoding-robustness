@@ -6,10 +6,6 @@ for i in $(seq 5 5 50); do
     python main.py --ptb-type 'token' --ptb-pct $i
 done
 
-for i in $(seq 5 5 50); do
+for i in $(seq 0 5 100); do
     python main.py --ptb-type 'shuffle' --ptb-pct $i
-done
-
-for i in $(seq 5 5 50); do
-    python main.py --ptb-type 'noise' --ptb-pct $i
 done

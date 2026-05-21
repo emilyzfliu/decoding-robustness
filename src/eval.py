@@ -6,20 +6,15 @@ Compute ALL evaluation metrics.
 import torch
 import Levenshtein
 
-def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokenizer, model):
+def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokenizer):
     return ({
         'sample': [x for x in range(outputs_base.logits.shape[0])],
-        'base_perplexity': perplexity(inputs_base, outputs_base),
-        'ptb_perplexity': perplexity(inputs_perturb, outputs_perturb),
+        'perplexity': perplexity(inputs_perturb, outputs_perturb),
         'output_divergence': output_divergence(outputs_base, outputs_perturb, tokenizer),
     }, {
         **get_sample_and_token_indices(inputs_base),
-        'top5_divergence': topk_divergence(outputs_base, outputs_perturb, 5),
-        'top25_divergence': topk_divergence(outputs_base, outputs_perturb, 25),
-        'top50_divergence': topk_divergence(outputs_base, outputs_perturb, 50),
-        'top100_divergence': topk_divergence(outputs_base, outputs_perturb, 100),
+        'top50_divergence': topk_divergence(outputs_base, outputs_perturb),
         **activation_similarity(outputs_base, outputs_perturb),
-        **attention_entropy(outputs_base, 'base'),
         **attention_entropy(outputs_perturb, 'ptb')
     })
 

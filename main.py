@@ -3,7 +3,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
 import random 
 import argparse
-import string
 import os
 import pandas as pd
 
@@ -15,7 +14,7 @@ def run(args):
     ptb_type = args.ptb_type
     ptb_pct = args.ptb_pct
     
-    rng = random.Random(1)
+    rng = random.Random(args.seed)
     # Set up models
     tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
     model = AutoModelForCausalLM.from_pretrained(
@@ -32,6 +31,10 @@ def run(args):
     texts = list(ds['test']['text'])
     texts = [x for x in texts if len(x.split()) > SEQ_LEN]
 
+    rng_data = random.Random(1)
+
+    texts = rng_data.sample(texts, 100)
+
     if args.debug:
         texts = [
             'Lorem ipsum dolor sit amet',
@@ -39,17 +42,7 @@ def run(args):
         ]
     
 
-    if ptb_type == 'char':
-        sub_pool = string.ascii_letters + string.digits + string.punctuation
-    elif ptb_type in ['token', 'noise']:
-        sub_pool = [
-            token for token in tokenizer.get_vocab() 
-            if token not in tokenizer.all_special_tokens
-        ]
-    else:
-        sub_pool=None
-
-    texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, sub_pool)
+    texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer)
 
 
     BATCH_SIZE = 4
@@ -76,11 +69,12 @@ def run(args):
             outputs = model(**inputs, output_hidden_states=True, output_attentions=True)
             outputs_perturbed = model(**inputs_perturbed, output_hidden_states=True, output_attentions=True)
         
-        res_seq, res_tok = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, model)
+        res_seq, res_tok = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer)
 
         # adjust samples
 
         res_seq['sample'] = [x+i*4 for x in res_seq['sample']]
+        res_tok['sample'] = [x+i*4 for x in res_tok['sample']]
         
         res_seq = pd.DataFrame(res_seq)
         res_seq = res_seq[~res_seq['sample'].isin(seen)]
@@ -101,6 +95,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--ptb-type", help="Perturbation type: ['char', 'token', 'shuffle', 'noise']", type=str, default='char')
     parser.add_argument("--ptb-pct", help="Percent of input text perturbed", type=int, default=0)
+    parser.add_argument("--seed", help="Random seed", type=int, default=1)
     parser.add_argument("--debug", action='store_true')
 
     args = parser.parse_args()
