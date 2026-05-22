@@ -15,7 +15,7 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
         **get_sample_and_token_indices(inputs_base),
         'top50_divergence': topk_divergence(outputs_base, outputs_perturb),
         **activation_similarity(outputs_base, outputs_perturb),
-        **attention_entropy(outputs_perturb, 'ptb')
+        **attention_entropy(outputs_perturb)
     })
 
 def get_sample_and_token_indices(inputs_base):
@@ -100,7 +100,7 @@ def activation_similarity(outputs_base, outputs_perturb):
 
     return ret
 
-def attention_entropy(outputs, prefix):
+def attention_entropy(outputs):
     attentions = outputs.attentions
     _, nh, _, _ = attentions[0].shape
 
@@ -113,6 +113,6 @@ def attention_entropy(outputs, prefix):
             safe_att = head_att.clamp(min=1e-9)
             entropy = -torch.sum(mask * head_att * torch.log(safe_att), dim=-1)
             
-            ret[f'{prefix}_attn_layer{i}_head_{h}_entropy'] = entropy.flatten().tolist()
+            ret[f'attn_layer{i}_head_{h}_entropy'] = entropy.flatten().tolist()
     
     return ret
