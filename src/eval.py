@@ -5,18 +5,33 @@ Compute ALL evaluation metrics.
 
 import torch
 import Levenshtein
+import pandas as pd
+from scipy.stats import entropy
 
-def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokenizer):
-    return ({
+
+def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokenizer, i):
+    seq_level =  pd.DataFrame({
         'sample': [x for x in range(outputs_base.logits.shape[0])],
         'perplexity': perplexity(inputs_perturb, outputs_perturb),
         'output_divergence': output_divergence(outputs_base, outputs_perturb, tokenizer),
-    }, {
+    })
+
+    seq_level['sample'] = [x+i*4 for x in seq_level['sample']]
+
+    tok_level = pd.DataFrame({
         **get_sample_and_token_indices(inputs_base),
         'top50_divergence': topk_divergence(outputs_base, outputs_perturb),
+        'top5_divergence': topk_divergence(outputs_base, outputs_perturb, k=5),
         **activation_similarity(outputs_base, outputs_perturb),
-        **attention_entropy(outputs_perturb)
+        **attention_entropy(outputs_perturb),
+        'logit_kl': logit_kl(outputs_base, outputs_perturb)
     })
+
+    tok_level = tok_level.groupby('sample').mean()
+
+    tok_level['sample'] = [x+i*4 for x in tok_level['sample']]
+
+    return pd.merge(seq_level, tok_level, on='sample', how='inner')
 
 def get_sample_and_token_indices(inputs_base):
     n_samples, sample_length = inputs_base.input_ids.shape
@@ -61,6 +76,17 @@ def output_divergence(outputs_base, outputs_perturb, tokenizer):
     text_ptb_out = tokenizer.batch_decode(torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1))
 
     return [Levenshtein.distance(x, y)/max(len(x), len(y)) for x, y in zip(text_base_out, text_ptb_out)]
+
+def logit_kl(outputs_base, outputs_perturb):
+    logits_base = outputs_base.logits[:, :-1, :]
+    logits_ptb = outputs_perturb.logits[:, :-1, :]
+
+    probs_base = torch.nn.softmax(logits_base, dim=-1).flatten().tolist()
+    probs_ptb = torch.nn.softmax(logits_ptb, dim=-1).flatten().tolist()
+
+    kl = entropy(probs_base, probs_ptb, axis=-1)
+
+    return kl
 
 def topk_divergence(outputs_base, outputs_perturb, k=50):
     cutoffs_base = torch.min(torch.topk(outputs_base.logits[:, :-1, :], k, dim=-1).values, dim=-1, keepdims=True).values

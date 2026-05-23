@@ -69,22 +69,10 @@ def run(args):
             outputs = model(**inputs, output_hidden_states=True, output_attentions=True)
             outputs_perturbed = model(**inputs_perturbed, output_hidden_states=True, output_attentions=True)
         
-        res_seq, res_tok = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer)
+        res = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, i)
 
-        # adjust samples
-
-        res_seq['sample'] = [x+i*4 for x in res_seq['sample']]
-        res_tok['sample'] = [x+i*4 for x in res_tok['sample']]
-        
-        res_seq = pd.DataFrame(res_seq)
-        res_seq = res_seq[~res_seq['sample'].isin(seen)]
-        res_seq.to_csv(f'results/{ptb_type}/{ptb_pct}/sequence_evals.csv', 
-                                    mode='a', header=(i==0 and len(seen) == 0), index=False)
-        
-        
-        res_tok = pd.DataFrame(res_tok)
-        res_tok = res_tok[~res_tok['sample'].isin(seen)]
-        res_tok.to_csv(f'results/{ptb_type}/{ptb_pct}/token_evals.csv',
+        res = res[~res['sample'].isin(seen)]
+        res.to_csv(f'results/{ptb_type}/{ptb_pct}/evals.csv', 
                                     mode='a', header=(i==0 and len(seen) == 0), index=False)
         
         del outputs, outputs_perturbed
