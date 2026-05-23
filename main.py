@@ -72,8 +72,11 @@ def run(args):
         res = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, i)
 
         res = res[~res['sample'].isin(seen)]
-        res.to_csv(f'results/{ptb_type}/{ptb_pct}/evals.csv', 
+        if not args.debug:
+            res.to_csv(f'results/{ptb_type}/{ptb_pct}/evals.csv', 
                                     mode='a', header=(i==0 and len(seen) == 0), index=False)
+        else:
+            res.to_csv('results/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
         
         del outputs, outputs_perturbed
 

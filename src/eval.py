@@ -26,10 +26,10 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
         **attention_entropy(outputs_perturb),
         'logit_kl': logit_kl(outputs_base, outputs_perturb)
     })
-
-    tok_level = tok_level.groupby('sample').mean()
-
     tok_level['sample'] = [x+i*4 for x in tok_level['sample']]
+
+    tok_level = tok_level.groupby('sample',as_index=False).mean()
+
 
     return pd.merge(seq_level, tok_level, on='sample', how='inner')
 
@@ -81,8 +81,8 @@ def logit_kl(outputs_base, outputs_perturb):
     logits_base = outputs_base.logits[:, :-1, :]
     logits_ptb = outputs_perturb.logits[:, :-1, :]
 
-    probs_base = torch.nn.softmax(logits_base, dim=-1).flatten().tolist()
-    probs_ptb = torch.nn.softmax(logits_ptb, dim=-1).flatten().tolist()
+    probs_base = torch.nn.functional.softmax(logits_base, dim=-1).flatten().tolist()
+    probs_ptb = torch.nn.functional.softmax(logits_ptb, dim=-1).flatten().tolist()
 
     kl = entropy(probs_base, probs_ptb, axis=-1)
 
