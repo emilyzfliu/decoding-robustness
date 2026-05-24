@@ -52,7 +52,7 @@ def run(args):
     os.makedirs(f'results/{ptb_type}/{ptb_pct}', exist_ok=True)
 
     try:
-        seen = set(pd.read_csv(f'results/{ptb_type}/{ptb_pct}/sequence_evals.csv')['sample'])
+        seen = set(pd.read_csv(f'results/{ptb_type}/{ptb_pct}/evals.csv')['sample'])
     except:
         seen = set()
 
@@ -84,7 +84,7 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Params: perturb_type, perturb_pct")
 
-    parser.add_argument("--ptb-type", help="Perturbation type: ['char', 'token', 'shuffle', 'noise']", type=str, default='char')
+    parser.add_argument("--ptb-type", help="Perturbation type: ['char', 'token', 'shuffle']", type=str, default='char')
     parser.add_argument("--ptb-pct", help="Percent of input text perturbed", type=int, default=0)
     parser.add_argument("--seed", help="Random seed", type=int, default=1)
     parser.add_argument("--debug", action='store_true')
