@@ -73,7 +73,7 @@ def score_head(curve_stats, std_at_peak):
 
 def id_ablation_heads_entropy(args):
     ptb_type = args.ptb_type
-    ptb_pct = [x*5 for x in range(11)] if ptb_type != 'shuffle' else [x*5 for x in range(21)]
+    ptb_pct = [x*5 for x in range(1, 11)] if ptb_type != 'shuffle' else [x*5 for x in range(1, 21)]
 
     scores = {}
 
@@ -82,13 +82,15 @@ def id_ablation_heads_entropy(args):
             entropy_vals = []
             for pct in ptb_pct:
                 res = pd.read_csv(f'results/{ptb_type}/{pct}/evals.csv')
-                entropy_vals.append(res['attn_layer_{i}_head_{h}_entropy'])
+                entropy_vals.append(np.mean(res[f'attn_layer{i}_head_{h}_entropy']))
             peak_pct, curve_stats = characterize_entropy_curve(ptb_pct, entropy_vals)
-            scores[(i, h, peak_pct)] = score_head(curve_stats)
+            res_pk = pd.read_csv(f'results/{ptb_type}/{peak_pct}/evals.csv')
+            scores[(i, h, peak_pct)] = score_head(curve_stats, np.std(res_pk[f'attn_layer{i}_head_{h}_entropy']))
     
     ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     top_heads = ranked[:10]
-    return top_heads
+    
+    return [x[0] for x in top_heads]
 
 def id_ablation_heads_activation(args):
     ptb_type = args.ptb_type
@@ -150,7 +152,7 @@ def run_ablation(args, ablate_type, ptb_pct, l, h):
 
     from tqdm import tqdm
 
-    os.makedirs(f'results/ablated/{ptb_type}/l={l}_h={h}_pct={ptb_pct}', exist_ok=True)
+    os.makedirs(f'results/ablated/{ptb_type}_{ablate_type}/l={l}_h={h}_pct={ptb_pct}', exist_ok=True)
 
     try:
         seen = set(pd.read_csv(f'results/ablated/{ptb_type}_{ablate_type}/l={l}_h={h}_pct={ptb_pct}/evals.csv')['sample'])
@@ -186,12 +188,12 @@ def run(args):
     entropy_heads = id_ablation_heads_entropy(args)
     for l, h, pct in entropy_heads:
         print('entropy', pct, l, h)
-        run_ablation(args, 'entropy', pct, l, h)
+        # run_ablation(args, 'entropy', pct, l, h)
     
     activation_heads = id_ablation_heads_activation(args)
     for l, h, pct in activation_heads:
         print('activation', pct, l, h)
-        run_ablation(args, 'activation', pct, l, h)
+        # run_ablation(args, 'activation', pct, l, h)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Params: perturb_type, perturb_pct")
