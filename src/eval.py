@@ -9,23 +9,27 @@ import pandas as pd
 from scipy.stats import entropy
 
 
-def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokenizer, i):
+def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokenizer, i, output_only=False):
     seq_level =  pd.DataFrame({
         'sample': [x for x in range(outputs_base.logits.shape[0])],
         'perplexity': perplexity(inputs_perturb, outputs_perturb),
+        'perplexity_baseline': perplexity(inputs_base, outputs_base),
         'output_divergence': output_divergence(outputs_base, outputs_perturb, tokenizer),
     })
 
     seq_level['sample'] = [x+i*4 for x in seq_level['sample']]
-
-    tok_level = pd.DataFrame({
-        **get_sample_and_token_indices(inputs_base),
-        'top50_divergence': topk_divergence(outputs_base, outputs_perturb),
-        'top5_divergence': topk_divergence(outputs_base, outputs_perturb, k=5),
-        **activation_similarity(outputs_base, outputs_perturb),
-        **attention_entropy(outputs_perturb),
-        'logit_kl': logit_kl(outputs_base, outputs_perturb)
-    })
+    if output_only:
+        tok_level = pd.DataFrame({
+            **get_sample_and_token_indices(inputs_base),
+            'logit_kl': logit_kl(outputs_base, outputs_perturb)
+        })
+    else:
+        tok_level = pd.DataFrame({
+            **get_sample_and_token_indices(inputs_base),
+            **activation_similarity(outputs_base, outputs_perturb),
+            **attention_entropy(outputs_perturb),
+            'logit_kl': logit_kl(outputs_base, outputs_perturb)
+        })
     tok_level['sample'] = [x+i*4 for x in tok_level['sample']]
 
     tok_level = tok_level.groupby('sample',as_index=False).mean()
