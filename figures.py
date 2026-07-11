@@ -25,6 +25,7 @@ percentages = [[x*5 for x in range(1, 11)] if x != 'shuffle' else [x*5 for x in 
 baseline = pd.read_csv('results/char/0/evals.csv')
 
 ##### Figure 1 #####
+print('Figure 1')
 
 fig, axs = plt.subplots(1, 3, figsize=(18, 5))
 fig.suptitle('Behavioral Metrics', fontsize=14)
@@ -107,11 +108,12 @@ axs[2].set_xlabel('Perturbation %')
 
 axs[2].legend()
 
-plt.savefig(f'results/behavioral.png', bbox_inches='tight', dpi=150)
+plt.savefig(f'results/fig1.png', bbox_inches='tight', dpi=150)
 
 ####################
 
 ##### Figure 2 #####
+print('Figure 2')
 
 from src.perturbs import perturb
 
@@ -147,7 +149,7 @@ def generate_input_div(ptb_type, ptb_pct):
     
     return np.median(dists), np.percentile(dists, 25), np.percentile(dists, 75)
 
-fig, axs = plt.subplots(1, 3, figsize=(18, 5))
+fig, axs = plt.subplots(1, 3, figsize=(20, 6))
 fig.suptitle('Input vs Output Divergence', fontsize=14)
 
 for idx in range(3):
@@ -185,12 +187,14 @@ for idx in range(3):
     axs[idx].set_xlabel('Perturbation %')
     axs[idx].legend()
 
-plt.savefig(f'results/in_vs_out.png', bbox_inches='tight', dpi=150)
+plt.savefig(f'results/fig2.png', bbox_inches='tight', dpi=150)
 
 #####################
 
 ###### Figure 3 #####
-fig, axs = plt.subplots(1, 3, figsize=(20, 5))
+print('Figure 3')
+
+fig, axs = plt.subplots(1, 3, figsize=(15, 5))
 fig.suptitle('Per-Layer Activation Cosine Similarity', fontsize=14)
 
 
@@ -212,12 +216,12 @@ for i, PTB_TYPE in enumerate(ptb_types):
     axs[i].set_title(ptb_names[i])
     axs[i].set_xlabel('Layer')
     axs[i].set_ylabel('Percentage')
-plt.savefig(f'results/mean_activation_similarity.png')
+plt.savefig(f'results/fig3.png')
 
 ####################
 
 ##### Figure 4 #####
-
+print('Figure 4')
 
 fig, axs = plt.subplots(1, 3, figsize=(20, 6))
 fig.suptitle('Change in Entropy with Increasing Perturbation', fontsize=14)
@@ -252,11 +256,12 @@ for i, PTB_TYPE in enumerate(ptb_types):
     ax.set_ylabel('Head')
 
 plt.tight_layout()
-plt.savefig(f'results/entropy_slope_heatmap.png', bbox_inches='tight', dpi=150)
+plt.savefig(f'results/fig4.png', bbox_inches='tight', dpi=150)
 
 ####################
 
 ##### Figure 5 #####
+print('Figure 5')
 
 def parse_info(dir_name):
     template ="l={layer}_h={head}_pct={ptb_pct}_{classif}"
@@ -380,6 +385,6 @@ handles = [
 fig.legend(handles=handles, loc='lower center', ncol=5, fontsize=9, bbox_to_anchor=(0.5, -0.08))
 fig.tight_layout()
 
-plt.savefig(f'results/ablations.png', bbox_inches='tight', dpi=150)
+plt.savefig(f'results/fig5.png', bbox_inches='tight', dpi=150)
 
 ####################

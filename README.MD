@@ -1,4 +1,4 @@
-# How Different Input Perturbations Propagate Through GPT-2
+# Input Perturbations Propagate Differently: A Mechanistic Analysis of GPT-2 Robustness
 
 Mechanistic failure modes under lexical, tokenizer, and positional corruption.
 

@@ -8,19 +8,18 @@ import pandas as pd
 
 from src.perturbs import perturb
 from src.eval import eval_loop
+from config import MODEL_INFO
 
 def run(args):
     SEQ_LEN = 128 if not args.debug else 5
     ptb_type = args.ptb_type
     ptb_pct = args.ptb_pct
+    model_name = MODEL_INFO[args.model]['model_name']
     
     rng = random.Random(args.seed)
     # Set up models
-    tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
-    model = AutoModelForCausalLM.from_pretrained(
-        "openai-community/gpt2",
-        attn_implementation='eager'
-    )
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name)
 
     # Set up dataset
     tokenizer.pad_token = tokenizer.eos_token
@@ -33,14 +32,13 @@ def run(args):
 
     rng_data = random.Random(1)
 
-    texts = rng_data.sample(texts, 100)
+    # texts = rng_data.sample(texts, 100)
 
     if args.debug:
         texts = [
             'Lorem ipsum dolor sit amet',
             'Hello world! Hello universe?'
         ]
-    
 
     texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer)
 
@@ -49,10 +47,10 @@ def run(args):
 
     from tqdm import tqdm
 
-    os.makedirs(f'results/{ptb_type}/{ptb_pct}', exist_ok=True)
+    os.makedirs(f'results_{model_name}/{ptb_type}/{ptb_pct}', exist_ok=True)
 
     try:
-        seen = set(pd.read_csv(f'results/{ptb_type}/{ptb_pct}/evals.csv')['sample'])
+        seen = set(pd.read_csv(f'results_{model_name}/{ptb_type}/{ptb_pct}/evals.csv')['sample'])
     except:
         seen = set()
 
@@ -73,10 +71,10 @@ def run(args):
 
         res = res[~res['sample'].isin(seen)]
         if not args.debug:
-            res.to_csv(f'results/{ptb_type}/{ptb_pct}/evals.csv', 
+            res.to_csv(f'results_{model_name}/{ptb_type}/{ptb_pct}/evals.csv', 
                                     mode='a', header=(i==0 and len(seen) == 0), index=False)
         else:
-            res.to_csv('results/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
+            res.to_csv(f'results_{model_name}/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
         
         del outputs, outputs_perturbed
 
@@ -84,6 +82,7 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Params: perturb_type, perturb_pct")
 
+    parser.add_argument("--model", help="Model name", type=str, default='gpt2')
     parser.add_argument("--ptb-type", help="Perturbation type: ['char', 'token', 'shuffle']", type=str, default='char')
     parser.add_argument("--ptb-pct", help="Percent of input text perturbed", type=int, default=0)
     parser.add_argument("--seed", help="Random seed", type=int, default=1)
