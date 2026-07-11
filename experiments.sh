@@ -1,3 +1,9 @@
+# Store HF model/dataset downloads on the archive mount
+export HF_HOME=/archive/varghese/decoding-robustness/hf_cache
+
+# GPU to run on (override with: CUDA_VISIBLE_DEVICES=2 bash experiments.sh)
+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+
 # Base experiments
 for i in $(seq 0 5 50); do
     python main.py --ptb-type 'char' --ptb-pct $i
