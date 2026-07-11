@@ -16,11 +16,13 @@ def run(args):
     
     rng = random.Random(args.seed)
     # Set up models
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
     model = AutoModelForCausalLM.from_pretrained(
         "openai-community/gpt2",
         attn_implementation='eager'
-    )
+    ).to(device)
+    model.eval()
 
     # Set up dataset
     tokenizer.pad_token = tokenizer.eos_token
@@ -45,7 +47,7 @@ def run(args):
     texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer)
 
 
-    BATCH_SIZE = 4
+    BATCH_SIZE = 16
 
     from tqdm import tqdm
 
@@ -60,10 +62,10 @@ def run(args):
         batch_texts = texts[i:i+BATCH_SIZE]
         batch_texts_perturbed = texts_perturbed[i:i+BATCH_SIZE]
         
-        inputs = tokenizer(batch_texts, return_tensors="pt", 
-                        truncation=True, max_length=128, padding='max_length')
+        inputs = tokenizer(batch_texts, return_tensors="pt",
+                        truncation=True, max_length=128, padding='max_length').to(device)
         inputs_perturbed = tokenizer(batch_texts_perturbed, return_tensors="pt",
-                                    truncation=True, max_length=128, padding='max_length')
+                                    truncation=True, max_length=128, padding='max_length').to(device)
         
         with torch.no_grad():
             outputs = model(**inputs, output_hidden_states=True, output_attentions=True)

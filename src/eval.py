@@ -10,12 +10,17 @@ from scipy.stats import entropy
 
 
 def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokenizer, i, output_only=False):
-    seq_level =  pd.DataFrame({
+    seq_cols = {
         'sample': [x for x in range(outputs_base.logits.shape[0])],
         'perplexity': perplexity(inputs_perturb, outputs_perturb),
         'perplexity_baseline': perplexity(inputs_base, outputs_base),
         'output_divergence': output_divergence(outputs_base, outputs_perturb, tokenizer),
-    })
+    }
+    # Per-sample linear CKA: a representation-similarity metric robust to the
+    # massive-activation outlier dims that inflate raw cosine at late layers.
+    if not output_only:
+        seq_cols.update(activation_cka(outputs_base, outputs_perturb))
+    seq_level = pd.DataFrame(seq_cols)
 
     seq_level['sample'] = [x+i*4 for x in seq_level['sample']]
     if output_only:
@@ -76,8 +81,8 @@ def perplexity(inputs, outputs):
     return seq_perplexities.tolist()
 
 def output_divergence(outputs_base, outputs_perturb, tokenizer):
-    text_base_out = tokenizer.batch_decode(torch.argmax(outputs_base.logits[:, :-1, :], dim=-1))
-    text_ptb_out = tokenizer.batch_decode(torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1))
+    text_base_out = tokenizer.batch_decode(torch.argmax(outputs_base.logits[:, :-1, :], dim=-1).cpu())
+    text_ptb_out = tokenizer.batch_decode(torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1).cpu())
 
     return [Levenshtein.distance(x, y)/max(len(x), len(y)) for x, y in zip(text_base_out, text_ptb_out)]
 
@@ -128,6 +133,52 @@ def activation_similarity(outputs_base, outputs_perturb):
         l2 = torch.sum((base_i - ptb_i) ** 2, dim=-1)
         ret[f'activation_l2_dist_layer_{i}'] = l2.flatten().tolist()
 
+    return ret
+
+def _linear_cka(X, Y):
+    """
+    Linear CKA between two (n_tokens, d) activation matrices.
+    Centers each feature (removes the massive-activation constant offset) but
+    does NOT rescale per-dimension, so near-constant noise dims stay negligible.
+    Returns a scalar in [0, 1].
+    """
+    X = X - X.mean(dim=0, keepdim=True)
+    Y = Y - Y.mean(dim=0, keepdim=True)
+    num = torch.norm(Y.t() @ X) ** 2
+    den = torch.norm(X.t() @ X) * torch.norm(Y.t() @ Y)
+    return (num / (den + 1e-9)).item()
+
+DROP_K = 5  # drop the k highest-variance (massive-activation) dims per layer
+
+def _drop_top_var_dims(X, Y, k):
+    """Drop the k dims with largest across-token variance (measured on clean X)."""
+    if k <= 0:
+        return X, Y
+    keep = torch.argsort(X.var(dim=0))[:-k]
+    return X[:, keep], Y[:, keep]
+
+def activation_cka(outputs_base, outputs_perturb, k=DROP_K):
+    """
+    Per-sample representation similarity AFTER dropping the top-k highest-variance
+    dims per layer. Those outlier dims (massive activations) confound both raw
+    cosine (via magnitude) and plain CKA (via variance); removing them leaves the
+    genuine content signal, on which stripped cosine and stripped CKA agree.
+    """
+    base_hidden = outputs_base.hidden_states
+    ptb_hidden = outputs_perturb.hidden_states
+    n_samples = base_hidden[0].shape[0]
+
+    ret = {}
+    for L in range(len(base_hidden)):
+        cka_vals, cos_vals = [], []
+        for b in range(n_samples):
+            X = base_hidden[L][b, :-1, :].float()
+            Y = ptb_hidden[L][b, :-1, :].float()
+            Xs, Ys = _drop_top_var_dims(X, Y, k)
+            cka_vals.append(_linear_cka(Xs, Ys))
+            cos_vals.append(torch.cosine_similarity(Xs, Ys, dim=-1).mean().item())
+        ret[f'activation_cka_layer_{L}'] = cka_vals
+        ret[f'activation_cos_stripped_layer_{L}'] = cos_vals
     return ret
 
 def attention_entropy(outputs):
