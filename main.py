@@ -61,11 +61,9 @@ def run(args):
         batch_texts_perturbed = texts_perturbed[i:i+BATCH_SIZE]
         
         inputs = tokenizer(batch_texts, return_tensors="pt", 
-                        truncation=True, max_length=128, padding='max_length')
-        inputs = {k: v.to(device) for k, v in inputs.items()}
+                        truncation=True, max_length=128, padding='max_length').to(device)
         inputs_perturbed = tokenizer(batch_texts_perturbed, return_tensors="pt",
-                                    truncation=True, max_length=128, padding='max_length')
-        inputs_perturbed = {k: v.to(device) for k, v in inputs_perturbed.items()}
+                                    truncation=True, max_length=128, padding='max_length').to(device)
         
         with torch.no_grad():
             # TODO set output_hidden_states back to True if we want to compute activation similarity
