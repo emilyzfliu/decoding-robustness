@@ -3,7 +3,7 @@
 # python main.py --model 'gpt2' --ptb-type 'token'
 # python main.py --model 'gpt2' --ptb-type 'shuffle'
 
-for model in 'gpt2' 'gpt2-medium' 'gpt2-large' 'gpt2-xl'; do
+for model in 'gpt2-medium' 'gpt2-large' 'gpt2-xl'; do
     for ptb_type in 'char' 'token' 'shuffle'; do
         python main.py --model $model --ptb-type $ptb_type
     done

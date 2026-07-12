@@ -42,8 +42,17 @@ def run(args):
     BATCH_SIZE = 128 if torch.cuda.is_available() else 4
     
     ptb_type = args.ptb_type
-    ptb_pcts = [args.ptb_pct] if args.ptb_pct != -1 else [x*5 for x in range(1, 11)] if ptb_type != 'shuffle' else [x*5 for x in range(1, 21)]
 
+    if args.ptb_pct != -1:
+        ptb_pcts = [args.ptb_pct]
+    else:
+        if ptb_type == 'shuffle':
+            ptb_pcts = [x*5 for x in range(1, 21)]
+        elif ptb_type == 'char':
+            ptb_pcts = [x*5 for x in range(0, 11)] # baseline [hacky]
+        else:
+            ptb_pcts = [x*5 for x in range(1, 11)]
+    
     for ptb_pct in ptb_pcts:
         
         texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer)
