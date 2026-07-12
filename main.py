@@ -17,9 +17,11 @@ def run(args):
     model_name = MODEL_INFO[args.model]['model_name']
     
     rng = random.Random(args.seed)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Set up models
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name, attn_implementation=MODEL_INFO[args.model]['attn_implementation'])
+    tokenizer = AutoTokenizer.from_pretrained(model_name).to(device)
+    model = AutoModelForCausalLM.from_pretrained(model_name, attn_implementation=MODEL_INFO[args.model]['attn_implementation']).to(device)
 
     # Set up dataset
     tokenizer.pad_token = tokenizer.eos_token
@@ -43,8 +45,8 @@ def run(args):
     texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer)
 
 
-    BATCH_SIZE = 4
-
+    BATCH_SIZE = 128 if torch.cuda.is_available() else 4
+    
     from tqdm import tqdm
 
     os.makedirs(f'results_{model_name}/{ptb_type}/{ptb_pct}', exist_ok=True)
