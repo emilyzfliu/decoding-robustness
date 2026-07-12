@@ -7,7 +7,7 @@ for i in $(seq 5 5 50); do
     python main.py --model 'gpt2' --ptb-type 'token' --ptb-pct $i
 done
 
-for i in $(seq 0 5 100); do
+for i in $(seq 5 5 100); do
     python main.py --model 'gpt2' --ptb-type 'shuffle' --ptb-pct $i
 done
 

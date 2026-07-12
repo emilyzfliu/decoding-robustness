@@ -2,29 +2,41 @@ MODEL_INFO = {
     'gpt2': {
         'model_name': 'openai-community/gpt2',
         'num_layers': 12,
-        'num_heads': 12},
+        'num_heads': 12,
+        'attn_implementation': 'eager'},
     'gpt2-medium': {
         'model_name': 'openai-community/gpt2-medium',
         'num_layers': 24,
-        'num_heads': 16},
+        'num_heads': 16,
+        'attn_implementation': 'eager'},
     'gpt2-large': {
         'model_name': 'openai-community/gpt2-large',
         'num_layers': 36,
-        'num_heads': 20},
+        'num_heads': 20,
+        'attn_implementation': 'eager'},
     'gpt2-xl': {
         'model_name': 'openai-community/gpt2-xl',
         'num_layers': 48,
-        'num_heads': 25},
+        'num_heads': 25,
+        'attn_implementation': 'eager'},
     'qwen2.5_0.5b': {
         'model_name': 'Qwen/Qwen2.5-0.5B',
         'num_layers': 24,
-        'num_heads': 16},
+        'num_heads': 14,
+        'attn_implementation': 'eager'},
+    'qwen2.5_1.5b': {
+        'model_name': 'Qwen/Qwen2.5-1.5B',
+        'num_layers': 28,
+        'num_heads': 12,
+        'attn_implementation': 'eager'},
     'qwen2.5_3b': {
         'model_name': 'Qwen/Qwen2.5-3B',
-        'num_layers': 24,
-        'num_heads': 16},
+        'num_layers': 36,
+        'num_heads': 16,
+        'attn_implementation': 'eager'},
     'qwen2.5_7b': {
         'model_name': 'Qwen/Qwen2.5-7B',
-        'num_layers': 24,
-        'num_heads': 16},
+        'num_layers': 28,
+        'num_heads': 28,
+        'attn_implementation': 'eager'},
 }

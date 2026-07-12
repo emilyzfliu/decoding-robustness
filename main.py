@@ -19,7 +19,7 @@ def run(args):
     rng = random.Random(args.seed)
     # Set up models
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name, attn_implementation=MODEL_INFO[args.model]['attn_implementation'])
 
     # Set up dataset
     tokenizer.pad_token = tokenizer.eos_token
@@ -64,8 +64,9 @@ def run(args):
                                     truncation=True, max_length=128, padding='max_length')
         
         with torch.no_grad():
-            outputs = model(**inputs, output_hidden_states=True, output_attentions=True)
-            outputs_perturbed = model(**inputs_perturbed, output_hidden_states=True, output_attentions=True)
+            # TODO set output_hidden_states back to True if we want to compute activation similarity
+            outputs = model(**inputs, output_hidden_states=False, output_attentions=True)
+            outputs_perturbed = model(**inputs_perturbed, output_hidden_states=False, output_attentions=True)
         
         res = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, i)
 
