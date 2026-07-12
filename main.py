@@ -6,12 +6,14 @@ import argparse
 import os
 import pandas as pd
 from tqdm import tqdm
+from time import time
 
 from src.perturbs import perturb
 from src.eval import eval_loop
 from config import MODEL_INFO
 
 def run(args):
+    start_time = time()
     SEQ_LEN = 128 if not args.debug else 5
 
     model_name = MODEL_INFO[args.model]['model_name']
@@ -77,6 +79,7 @@ def run(args):
                 res.to_csv(f'results_{model_name}/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
             
             del outputs, outputs_perturbed
+    print(f"Total time taken: {time() - start_time:.2f} seconds")
 
 
 if __name__ == "__main__":
