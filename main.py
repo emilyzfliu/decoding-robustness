@@ -5,6 +5,7 @@ import random
 import argparse
 import os
 import pandas as pd
+from tqdm import tqdm
 
 from src.perturbs import perturb
 from src.eval import eval_loop
@@ -12,44 +13,38 @@ from config import MODEL_INFO
 
 def run(args):
     SEQ_LEN = 128 if not args.debug else 5
+
+    model_name = MODEL_INFO[args.model]['model_name']
+        
+    rng = random.Random(args.seed)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Set up models
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name, attn_implementation=MODEL_INFO[args.model]['attn_implementation']).to(device)
+
+    # Set up dataset
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left"
+
+    ds = load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1")
+
+    texts = list(ds['test']['text'])
+    texts = [x for x in texts if len(x.split()) > SEQ_LEN]
+    if args.debug:
+        texts = [
+            'Lorem ipsum dolor sit amet',
+            'Hello world! Hello universe?'
+        ]
+    
+    BATCH_SIZE = 128 if torch.cuda.is_available() else 4
+    
     ptb_type = args.ptb_type
     ptb_pcts = [args.ptb_pct] if args.ptb_pct != -1 else [x*5 for x in range(1, 11)] if ptb_type != 'shuffle' else [x*5 for x in range(1, 21)]
 
     for ptb_pct in ptb_pcts:
-        model_name = MODEL_INFO[args.model]['model_name']
         
-        rng = random.Random(args.seed)
-
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # Set up models
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForCausalLM.from_pretrained(model_name, attn_implementation=MODEL_INFO[args.model]['attn_implementation']).to(device)
-
-        # Set up dataset
-        tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.padding_side = "left"
-
-        ds = load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1")
-
-        texts = list(ds['test']['text'])
-        texts = [x for x in texts if len(x.split()) > SEQ_LEN]
-
-        rng_data = random.Random(1)
-
-        # texts = rng_data.sample(texts, 100)
-
-        if args.debug:
-            texts = [
-                'Lorem ipsum dolor sit amet',
-                'Hello world! Hello universe?'
-            ]
-
         texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer)
-
-
-        BATCH_SIZE = 128 if torch.cuda.is_available() else 4
-
-        from tqdm import tqdm
 
         os.makedirs(f'results_{model_name}/{ptb_type}/{ptb_pct}', exist_ok=True)
 
