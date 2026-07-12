@@ -20,7 +20,7 @@ def run(args):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Set up models
-    tokenizer = AutoTokenizer.from_pretrained(model_name).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForCausalLM.from_pretrained(model_name, attn_implementation=MODEL_INFO[args.model]['attn_implementation']).to(device)
 
     # Set up dataset
@@ -46,7 +46,7 @@ def run(args):
 
 
     BATCH_SIZE = 128 if torch.cuda.is_available() else 4
-    
+
     from tqdm import tqdm
 
     os.makedirs(f'results_{model_name}/{ptb_type}/{ptb_pct}', exist_ok=True)
@@ -62,8 +62,10 @@ def run(args):
         
         inputs = tokenizer(batch_texts, return_tensors="pt", 
                         truncation=True, max_length=128, padding='max_length')
+        inputs = {k: v.to(device) for k, v in inputs.items()}
         inputs_perturbed = tokenizer(batch_texts_perturbed, return_tensors="pt",
                                     truncation=True, max_length=128, padding='max_length')
+        inputs_perturbed = {k: v.to(device) for k, v in inputs_perturbed.items()}
         
         with torch.no_grad():
             # TODO set output_hidden_states back to True if we want to compute activation similarity
