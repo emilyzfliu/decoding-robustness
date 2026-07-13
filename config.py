@@ -29,11 +29,12 @@ MODEL_INFO = {
         'num_layers': 28,
         'num_heads': 12,
         'attn_implementation': 'eager'},
-    'qwen2.5_3b': {
-        'model_name': 'Qwen/Qwen2.5-3B',
-        'num_layers': 36,
-        'num_heads': 16,
-        'attn_implementation': 'eager'},
+    # Current 3b has bug
+    # 'qwen2.5_3b': {
+    #     'model_name': 'Qwen/Qwen2.5-3B',
+    #     'num_layers': 36,
+    #     'num_heads': 16,
+    #     'attn_implementation': 'eager'},
     'qwen2.5_7b': {
         'model_name': 'Qwen/Qwen2.5-7B',
         'num_layers': 28,
