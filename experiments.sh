@@ -10,7 +10,7 @@ for model in 'gpt2-medium' 'gpt2-large' 'gpt2-xl'; do
 done
 
 
-for model in 'qwen2.5_0.5b' 'qwen2.5_1.5b' 'qwen2.5_1.5b' 'qwen2.5_3b' 'qwen2.5_7b' ; do
+for model in 'qwen2.5_0.5b' 'qwen2.5_1.5b' 'qwen2.5_1.5b' 'qwen2.5_7b' 'qwen2.5_72b' ; do
     for ptb_type in 'char' 'token' 'shuffle'; do
         python main.py --model $model --ptb-type $ptb_type
     done

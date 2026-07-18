@@ -40,4 +40,10 @@ MODEL_INFO = {
         'num_layers': 28,
         'num_heads': 28,
         'attn_implementation': 'eager'},
+    'qwen2.5_72b': {
+        'model_name': 'Qwen/Qwen2.5-72B',
+        'num_layers': 80,
+        'num_heads': 64,
+        'attn_implementation': 'eager'
+    }
 }
