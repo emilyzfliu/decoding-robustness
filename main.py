@@ -75,8 +75,8 @@ def run(args):
             
             with torch.no_grad():
                 # TODO set output_hidden_states back to True if we want to compute activation similarity
-                outputs = model(**inputs, output_hidden_states=False, output_attentions=True)
-                outputs_perturbed = model(**inputs_perturbed, output_hidden_states=False, output_attentions=True)
+                outputs = model(**inputs, output_hidden_states=True, output_attentions=True)
+                outputs_perturbed = model(**inputs_perturbed, output_hidden_states=True, output_attentions=True)
             
             res = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, i)
 
