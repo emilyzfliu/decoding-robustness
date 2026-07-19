@@ -73,12 +73,12 @@ def run(args):
             inputs_perturbed = tokenizer(batch_texts_perturbed, return_tensors="pt",
                                         truncation=True, max_length=128, padding='max_length').to(device)
             
+            eval_hidden = MODEL_INFO[args.model]['eval_hidden_states']
             with torch.no_grad():
-                # TODO set output_hidden_states back to True if we want to compute activation similarity
-                outputs = model(**inputs, output_hidden_states=True, output_attentions=True)
-                outputs_perturbed = model(**inputs_perturbed, output_hidden_states=True, output_attentions=True)
+                outputs = model(**inputs, output_hidden_states= eval_hidden, output_attentions=eval_hidden)
+                outputs_perturbed = model(**inputs_perturbed, output_hidden_states=eval_hidden, output_attentions=eval_hidden)
             
-            res = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, i)
+            res = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, i, output_only=(not eval_hidden))
 
             res = res[~res['sample'].isin(seen)]
             if not args.debug:

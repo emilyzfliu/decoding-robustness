@@ -22,11 +22,6 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
     seq_level = pd.DataFrame(seq_cols)
 
     seq_level['sample'] = [x+i*4 for x in seq_level['sample']]
-    if output_only:
-        seq_cols.update(activation_cka(outputs_base, outputs_perturb))
-    seq_level = pd.DataFrame(seq_cols)
-
-    seq_level['sample'] = [x+i*4 for x in seq_level['sample']]
 
     # TODO: Logit KL on only the last n ptbs
     # if output_only:
