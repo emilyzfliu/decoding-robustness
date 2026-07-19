@@ -11,7 +11,7 @@
 
 
 # for model in 'qwen2.5_0.5b' 'qwen2.5_1.5b' 'qwen2.5_1.5b' 'qwen2.5_7b' 'qwen2.5_72b' ; do
-for model in 'qwen2.5_72b' ; do
+for model in 'qwen2.5_14b' 'qwen2.5_32b' 'qwen2.5_72b' ; do
     for ptb_type in 'char' 'token' 'shuffle'; do
         python main.py --model $model --ptb-type $ptb_type
     done
