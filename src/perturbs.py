@@ -50,7 +50,7 @@ def token_substitution(texts, perturb_pct, rng, tokenizer, max_length=128):
             else tid
             for tid in input_ids
         ]
-        ret.append(tokenizer.decode(new_ids))
+        ret.append(tokenizer.decode(new_ids, clean_up_tokenization_spaces=False))
     
     return ret
 

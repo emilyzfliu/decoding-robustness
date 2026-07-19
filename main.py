@@ -17,15 +17,19 @@ def run(args):
     rng = random.Random(args.seed)
     # Set up models
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
+    dtype = getattr(torch, args.dtype)
+    attn_impl = "sdpa" if args.no_attention else "eager"   # eager is required to return attentions
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
     model = AutoModelForCausalLM.from_pretrained(
-        "openai-community/gpt2",
-        attn_implementation='eager'
+        args.model,
+        dtype=dtype,
+        attn_implementation=attn_impl,
     ).to(device)
     model.eval()
 
     # Set up dataset
-    tokenizer.pad_token = tokenizer.eos_token
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
 
     ds = load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1")
@@ -47,14 +51,15 @@ def run(args):
     texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer)
 
 
-    BATCH_SIZE = 16
+    BATCH_SIZE = args.batch_size
 
     from tqdm import tqdm
 
-    os.makedirs(f'results/{ptb_type}/{ptb_pct}', exist_ok=True)
+    res_dir = f'{args.out_dir}/{ptb_type}/{ptb_pct}'
+    os.makedirs(res_dir, exist_ok=True)
 
     try:
-        seen = set(pd.read_csv(f'results/{ptb_type}/{ptb_pct}/evals.csv')['sample'])
+        seen = set(pd.read_csv(f'{res_dir}/evals.csv')['sample'])
     except:
         seen = set()
 
@@ -68,17 +73,17 @@ def run(args):
                                     truncation=True, max_length=128, padding='max_length').to(device)
         
         with torch.no_grad():
-            outputs = model(**inputs, output_hidden_states=True, output_attentions=True)
-            outputs_perturbed = model(**inputs_perturbed, output_hidden_states=True, output_attentions=True)
+            outputs = model(**inputs, output_hidden_states=True, output_attentions=not args.no_attention)
+            outputs_perturbed = model(**inputs_perturbed, output_hidden_states=True, output_attentions=not args.no_attention)
         
         res = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, i)
 
         res = res[~res['sample'].isin(seen)]
         if not args.debug:
-            res.to_csv(f'results/{ptb_type}/{ptb_pct}/evals.csv', 
+            res.to_csv(f'{res_dir}/evals.csv',
                                     mode='a', header=(i==0 and len(seen) == 0), index=False)
         else:
-            res.to_csv('results/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
+            res.to_csv(f'{args.out_dir}/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
         
         del outputs, outputs_perturbed
 
@@ -90,6 +95,11 @@ if __name__ == "__main__":
     parser.add_argument("--ptb-pct", help="Percent of input text perturbed", type=int, default=0)
     parser.add_argument("--seed", help="Random seed", type=int, default=1)
     parser.add_argument("--debug", action='store_true')
+    parser.add_argument("--model", help="HF model id", type=str, default="openai-community/gpt2")
+    parser.add_argument("--out-dir", help="Output directory root", type=str, default="results")
+    parser.add_argument("--batch-size", help="Batch size", type=int, default=16)
+    parser.add_argument("--dtype", type=str, default="float32", choices=["float32", "float16", "bfloat16"])
+    parser.add_argument("--no-attention", action='store_true', help="Skip attentions (Phase-1 large models)")
 
     args = parser.parse_args()
 

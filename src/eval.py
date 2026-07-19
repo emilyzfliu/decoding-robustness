@@ -6,7 +6,6 @@ Compute ALL evaluation metrics.
 import torch
 import Levenshtein
 import pandas as pd
-from scipy.stats import entropy
 
 
 def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokenizer, i, output_only=False):
@@ -29,12 +28,16 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
             'logit_kl': logit_kl(outputs_base, outputs_perturb)
         })
     else:
-        tok_level = pd.DataFrame({
+        tok_cols = {
             **get_sample_and_token_indices(inputs_base),
             **activation_similarity(outputs_base, outputs_perturb),
-            **attention_entropy(outputs_perturb),
-            'logit_kl': logit_kl(outputs_base, outputs_perturb)
-        })
+            'logit_kl': logit_kl(outputs_base, outputs_perturb),
+        }
+        # attention entropy only when attentions were computed (skipped for speed
+        # /memory when output_attentions=False, e.g. Llama Phase 1)
+        if outputs_perturb.attentions is not None:
+            tok_cols.update(attention_entropy(outputs_perturb))
+        tok_level = pd.DataFrame(tok_cols)
     tok_level['sample'] = [x+i*4 for x in tok_level['sample']]
 
     tok_level = tok_level.groupby('sample',as_index=False).mean()
@@ -81,21 +84,17 @@ def perplexity(inputs, outputs):
     return seq_perplexities.tolist()
 
 def output_divergence(outputs_base, outputs_perturb, tokenizer):
-    text_base_out = tokenizer.batch_decode(torch.argmax(outputs_base.logits[:, :-1, :], dim=-1).cpu())
-    text_ptb_out = tokenizer.batch_decode(torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1).cpu())
+    text_base_out = tokenizer.batch_decode(torch.argmax(outputs_base.logits[:, :-1, :], dim=-1).cpu(), clean_up_tokenization_spaces=False)
+    text_ptb_out = tokenizer.batch_decode(torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1).cpu(), clean_up_tokenization_spaces=False)
 
     return [Levenshtein.distance(x, y)/max(len(x), len(y)) for x, y in zip(text_base_out, text_ptb_out)]
 
 def logit_kl(outputs_base, outputs_perturb):
-    logits_base = outputs_base.logits[:, :-1, :]
-    logits_ptb = outputs_perturb.logits[:, :-1, :]
-
-    probs_base = torch.nn.functional.softmax(logits_base, dim=-1).flatten().tolist()
-    probs_ptb = torch.nn.functional.softmax(logits_ptb, dim=-1).flatten().tolist()
-
-    kl = entropy(probs_base, probs_ptb, axis=-1)
-
-    return kl
+    # per-token KL(P_base || P_ptb); upcast to fp32 for numerical stability
+    lp_base = torch.log_softmax(outputs_base.logits[:, :-1, :].float(), dim=-1)
+    lp_ptb  = torch.log_softmax(outputs_perturb.logits[:, :-1, :].float(), dim=-1)
+    kl = (lp_base.exp() * (lp_base - lp_ptb)).sum(dim=-1)   # (batch, seq-1)
+    return kl.flatten().tolist()                            # per-token; only batch*(seq-1) values to CPU
 
 def topk_divergence(outputs_base, outputs_perturb, k=50):
     cutoffs_base = torch.min(torch.topk(outputs_base.logits[:, :-1, :], k, dim=-1).values, dim=-1, keepdims=True).values
