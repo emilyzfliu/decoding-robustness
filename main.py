@@ -22,8 +22,14 @@ def run(args):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Set up models
+
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name, attn_implementation=MODEL_INFO[args.model]['attn_implementation']).to(device)
+    model = AutoModelForCausalLM.from_pretrained(
+      model_name, 
+      attn_implementation=MODEL_INFO[args.model]['attn_implementation']
+    ).to(device)
+
+    model.eval()
 
     # Set up dataset
     tokenizer.pad_token = tokenizer.eos_token

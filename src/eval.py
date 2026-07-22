@@ -80,8 +80,8 @@ def nll(inputs, outputs):
     return seq_losses.tolist()
 
 def output_divergence(outputs_base, outputs_perturb, tokenizer):
-    text_base_out = tokenizer.batch_decode(torch.argmax(outputs_base.logits[:, :-1, :], dim=-1))
-    text_ptb_out = tokenizer.batch_decode(torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1))
+    text_base_out = tokenizer.batch_decode(torch.argmax(outputs_base.logits[:, :-1, :], dim=-1).cpu())
+    text_ptb_out = tokenizer.batch_decode(torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1).cpu())
 
     return [Levenshtein.distance(x, y)/max(len(x), len(y)) for x, y in zip(text_base_out, text_ptb_out)]
 
@@ -181,7 +181,6 @@ def activation_cka(outputs_base, outputs_perturb, k=DROP_K):
         ret[f'activation_cka_layer_{L}'] = cka_vals
         ret[f'activation_cos_stripped_layer_{L}'] = cos_vals
     return ret
-
 
 def attention_entropy(outputs):
     attentions = outputs.attentions
