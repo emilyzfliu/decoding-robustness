@@ -16,6 +16,9 @@ from matplotlib.lines import Line2D
 
 from ablations import entropy_slope_by_head
 
+# Write figure/CSV outputs to a local figures/ dir (inputs are read from results/).
+os.makedirs('figures', exist_ok=True)
+
 ptb_types = ['token', 'char', 'shuffle']
 ptb_names = ['Token Substitution', 'Char substitution', 'Token Shuffling']
 percentages = [[x*5 for x in range(1, 11)] if x != 'shuffle' else [x*5 for x in range(1, 21)] for x in ptb_types]
@@ -107,7 +110,7 @@ axs[2].set_xlabel('Perturbation %')
 
 axs[2].legend()
 
-plt.savefig(f'results/behavioral.png', bbox_inches='tight', dpi=150)
+plt.savefig(f'figures/behavioral.png', bbox_inches='tight', dpi=150)
 
 ####################
 
@@ -185,7 +188,7 @@ for idx in range(3):
     axs[idx].set_xlabel('Perturbation %')
     axs[idx].legend()
 
-plt.savefig(f'results/in_vs_out.png', bbox_inches='tight', dpi=150)
+plt.savefig(f'figures/in_vs_out.png', bbox_inches='tight', dpi=150)
 
 #####################
 
@@ -212,7 +215,7 @@ for i, PTB_TYPE in enumerate(ptb_types):
     axs[i].set_title(ptb_names[i])
     axs[i].set_xlabel('Layer')
     axs[i].set_ylabel('Percentage')
-plt.savefig(f'results/mean_activation_similarity.png')
+plt.savefig(f'figures/mean_activation_similarity.png')
 
 ####################
 
@@ -252,7 +255,7 @@ for i, PTB_TYPE in enumerate(ptb_types):
     ax.set_ylabel('Head')
 
 plt.tight_layout()
-plt.savefig(f'results/entropy_slope_heatmap.png', bbox_inches='tight', dpi=150)
+plt.savefig(f'figures/entropy_slope_heatmap.png', bbox_inches='tight', dpi=150)
 
 ####################
 
@@ -318,9 +321,9 @@ for ptb in ptb_types:
         }
     )
 
-ablation_dfs['token'].to_csv('results/token_ablation_ranks.csv')
-ablation_dfs['char'].to_csv('results/char_ablation_ranks.csv')
-ablation_dfs['shuffle'].to_csv('results/shuffle_ablation_ranks.csv')
+ablation_dfs['token'].to_csv('figures/token_ablation_ranks.csv')
+ablation_dfs['char'].to_csv('figures/char_ablation_ranks.csv')
+ablation_dfs['shuffle'].to_csv('figures/shuffle_ablation_ranks.csv')
 
 CLASS_COLORS = {'propagator': '#2166ac', 'compensator': '#d6604d', 'neutral': '#888888'}
 
@@ -380,6 +383,60 @@ handles = [
 fig.legend(handles=handles, loc='lower center', ncol=5, fontsize=9, bbox_to_anchor=(0.5, -0.08))
 fig.tight_layout()
 
-plt.savefig(f'results/ablations.png', bbox_inches='tight', dpi=150)
+plt.savefig(f'figures/ablations.png', bbox_inches='tight', dpi=150)
+
+####################
+
+##### Figure 6: corrected representation similarity #####
+# Raw cosine is confounded by massive-activation outlier dims (fake final-layer
+# recovery). The stripped metrics drop the top-5 highest-variance dims per layer.
+
+pct_pick = {'token': 25, 'char': 25, 'shuffle': 50}
+layers = list(range(13))
+
+fig, axs = plt.subplots(1, 3, figsize=(20, 5))
+fig.suptitle('Per-Layer Representation Similarity: raw cosine (confounded) vs stripped metrics', fontsize=14)
+
+for i, PTB_TYPE in enumerate(ptb_types):
+    pct = pct_pick[PTB_TYPE]
+    seq = pd.read_csv(f'results/{PTB_TYPE}/{pct}/evals.csv')
+    raw_cos   = [np.mean(seq[f'activation_cos_sim_layer_{L}'])      for L in layers]
+    strip_cos = [np.mean(seq[f'activation_cos_stripped_layer_{L}']) for L in layers]
+    strip_cka = [np.mean(seq[f'activation_cka_layer_{L}'])          for L in layers]
+
+    axs[i].plot(layers, raw_cos,   'o--', color='#999999', label='raw cosine (confounded)')
+    axs[i].plot(layers, strip_cos, 's-',  color='#d6604d', label='stripped cosine')
+    axs[i].plot(layers, strip_cka, '^-',  color='#2166ac', label='stripped CKA')
+    axs[i].axhline(1.0, color='black', lw=0.4, alpha=0.5)
+    axs[i].set_title(f'{ptb_names[i]} @ {pct}%')
+    axs[i].set_xlabel('Layer')
+    axs[i].set_ylim(0, 1.02)
+    if i == 0:
+        axs[i].set_ylabel('Similarity to clean')
+    axs[i].legend(fontsize=9)
+
+plt.savefig(f'figures/representation_similarity_corrected.png', bbox_inches='tight', dpi=150)
+
+####################
+
+##### Figure 7: stripped-CKA heatmap (corrected version of Figure 3) #####
+
+fig, axs = plt.subplots(1, 3, figsize=(20, 5))
+fig.suptitle('Per-Layer Stripped CKA (massive-activation dims removed)', fontsize=14)
+
+for i, PTB_TYPE in enumerate(ptb_types):
+    mean_matrix = []
+    for pct in percentages[i]:
+        seq = pd.read_csv(f'results/{PTB_TYPE}/{pct}/evals.csv')
+        mean_matrix.append([np.mean(seq[f'activation_cka_layer_{L}']) for L in range(13)])
+    mean_matrix = np.array(mean_matrix)
+
+    sns.heatmap(mean_matrix, ax=axs[i], cmap='viridis', vmin=0, vmax=1,
+                yticklabels=percentages[i], xticklabels=[f'L{L}' for L in range(13)])
+    axs[i].set_title(ptb_names[i])
+    axs[i].set_xlabel('Layer')
+    axs[i].set_ylabel('Perturbation %')
+
+plt.savefig(f'figures/stripped_cka_heatmap.png', bbox_inches='tight', dpi=150)
 
 ####################
