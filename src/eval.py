@@ -24,18 +24,18 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
     seq_level['sample'] = [x+i*4 for x in seq_level['sample']]
 
     # TODO: Logit KL on only the last n ptbs
-    # if output_only:
-    #     tok_level = pd.DataFrame({
-    #         **get_sample_and_token_indices(inputs_base),
-    #         'logit_kl': logit_kl(outputs_base, outputs_perturb)
-    #     })
-    # else:
-    #     tok_level = pd.DataFrame({
-    #         **get_sample_and_token_indices(inputs_base),
-    #         **activation_similarity(outputs_base, outputs_perturb),
-    #         **attention_entropy(outputs_perturb),
-    #         'logit_kl': logit_kl(outputs_base, outputs_perturb)
-    #     })
+    if output_only:
+        tok_level = pd.DataFrame({
+            **get_sample_and_token_indices(inputs_base),
+            'logit_kl': logit_kl(outputs_base, outputs_perturb)
+        })
+    else:
+        tok_level = pd.DataFrame({
+            **get_sample_and_token_indices(inputs_base),
+            **activation_similarity(outputs_base, outputs_perturb),
+            **attention_entropy(outputs_perturb),
+            'logit_kl': logit_kl(outputs_base, outputs_perturb)
+        })
     # tok_level['sample'] = [x+i*4 for x in tok_level['sample']]
     # tok_level = tok_level.groupby('sample',as_index=False).mean()
     # return pd.merge(seq_level, tok_level, on='sample', how='inner')
