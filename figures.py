@@ -28,6 +28,7 @@ percentages = [[x*5 for x in range(1, 11)] if x != 'shuffle' else [x*5 for x in 
 baseline = pd.read_csv('results/char/0/evals.csv')
 
 ##### Figure 1 #####
+print('Figure 1')
 
 fig, axs = plt.subplots(1, 3, figsize=(18, 5))
 fig.suptitle('Behavioral Metrics', fontsize=14)
@@ -115,6 +116,7 @@ plt.savefig(f'figures/behavioral.png', bbox_inches='tight', dpi=150)
 ####################
 
 ##### Figure 2 #####
+print('Figure 2')
 
 from src.perturbs import perturb
 
@@ -150,7 +152,7 @@ def generate_input_div(ptb_type, ptb_pct):
     
     return np.median(dists), np.percentile(dists, 25), np.percentile(dists, 75)
 
-fig, axs = plt.subplots(1, 3, figsize=(18, 5))
+fig, axs = plt.subplots(1, 3, figsize=(20, 6))
 fig.suptitle('Input vs Output Divergence', fontsize=14)
 
 for idx in range(3):
@@ -193,7 +195,9 @@ plt.savefig(f'figures/in_vs_out.png', bbox_inches='tight', dpi=150)
 #####################
 
 ###### Figure 3 #####
-fig, axs = plt.subplots(1, 3, figsize=(20, 5))
+print('Figure 3')
+
+fig, axs = plt.subplots(1, 3, figsize=(15, 5))
 fig.suptitle('Per-Layer Activation Cosine Similarity', fontsize=14)
 
 
@@ -220,7 +224,7 @@ plt.savefig(f'figures/mean_activation_similarity.png')
 ####################
 
 ##### Figure 4 #####
-
+print('Figure 4')
 
 fig, axs = plt.subplots(1, 3, figsize=(20, 6))
 fig.suptitle('Change in Entropy with Increasing Perturbation', fontsize=14)
@@ -260,6 +264,7 @@ plt.savefig(f'figures/entropy_slope_heatmap.png', bbox_inches='tight', dpi=150)
 ####################
 
 ##### Figure 5 #####
+print('Figure 5')
 
 def parse_info(dir_name):
     template ="l={layer}_h={head}_pct={ptb_pct}_{classif}"
