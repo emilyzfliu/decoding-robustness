@@ -40,10 +40,13 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
     tok_level = tok_level.groupby('sample',as_index=False).mean()
     return pd.merge(seq_level, tok_level, on='sample', how='inner')
 
-def get_sample_and_token_indices(inputs_base):
+def get_sample_and_token_indices(inputs_base, num_eval_tokens=0):
     n_samples, sample_length = inputs_base.input_ids.shape
 
     sample_length -= 1
+
+    if num_eval_tokens > 0:
+        sample_length = num_eval_tokens
 
     sample_idx = []
     token_idx = []
@@ -72,9 +75,9 @@ def nll(inputs, outputs, num_eval_tokens=0):
         shift_logits = shift_logits[:, -num_eval_tokens:, :]
     
     token_losses = torch.nn.CrossEntropyLoss(reduction='none')(
-        shift_logits.view(-1, shift_logits.size(-1)),
-        shift_labels.view(-1)
-    ).view(input_ids.size(0), -1) 
+        shift_logits.reshape(-1, shift_logits.size(-1)),
+        shift_labels.reshape(-1)
+    ).reshape(input_ids.size(0), -1) 
     
     mask = (shift_labels != -100).float()
     seq_losses = (token_losses * mask).sum(dim=1) / mask.sum(dim=1)
