@@ -9,16 +9,16 @@ import pandas as pd
 from scipy.stats import entropy
 
 
-def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokenizer, i, output_only=False):
+def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokenizer, i, output_only=False, num_eval_tokens=0):
     seq_cols = {
         'sample': [x for x in range(outputs_base.logits.shape[0])],
-        'nll': nll(inputs_perturb, outputs_perturb),
-        'output_divergence': output_divergence(outputs_base, outputs_perturb, tokenizer),
+        'nll': nll(inputs_perturb, outputs_perturb, num_eval_tokens=num_eval_tokens),
+        'output_divergence': output_divergence(outputs_base, outputs_perturb, tokenizer, num_eval_tokens=num_eval_tokens),
     }
     # Per-sample linear CKA: a representation-similarity metric robust to the
     # massive-activation outlier dims that inflate raw cosine at late layers.
     if not output_only:
-        seq_cols.update(activation_cka(outputs_base, outputs_perturb))
+        seq_cols.update(activation_cka(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens))
     seq_level = pd.DataFrame(seq_cols)
 
     seq_level['sample'] = [x+i*4 for x in seq_level['sample']]
@@ -27,19 +27,18 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
     if output_only:
         tok_level = pd.DataFrame({
             **get_sample_and_token_indices(inputs_base),
-            'logit_kl': logit_kl(outputs_base, outputs_perturb)
+            'logit_kl': logit_kl(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens)
         })
     else:
         tok_level = pd.DataFrame({
             **get_sample_and_token_indices(inputs_base),
-            **activation_similarity(outputs_base, outputs_perturb),
-            **attention_entropy(outputs_perturb),
-            'logit_kl': logit_kl(outputs_base, outputs_perturb)
+            **activation_similarity(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens),
+            **attention_entropy(outputs_perturb, num_eval_tokens=num_eval_tokens),
+            'logit_kl': logit_kl(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens),
         })
-    # tok_level['sample'] = [x+i*4 for x in tok_level['sample']]
-    # tok_level = tok_level.groupby('sample',as_index=False).mean()
-    # return pd.merge(seq_level, tok_level, on='sample', how='inner')
-    return seq_level
+    tok_level['sample'] = [x+i*4 for x in tok_level['sample']]
+    tok_level = tok_level.groupby('sample',as_index=False).mean()
+    return pd.merge(seq_level, tok_level, on='sample', how='inner')
 
 def get_sample_and_token_indices(inputs_base):
     n_samples, sample_length = inputs_base.input_ids.shape
@@ -58,7 +57,7 @@ def get_sample_and_token_indices(inputs_base):
         'token_in_sample': token_idx
     }
 
-def nll(inputs, outputs):
+def nll(inputs, outputs, num_eval_tokens=0):
     input_ids = inputs.input_ids
     attention_mask = inputs.attention_mask
     
@@ -67,6 +66,10 @@ def nll(inputs, outputs):
     
     shift_logits = outputs.logits[..., :-1, :].contiguous()
     shift_labels = labels[..., 1:].contiguous()
+
+    if num_eval_tokens > 0:
+        shift_labels = shift_labels[:, :-num_eval_tokens]
+        shift_logits = shift_logits[:, :-num_eval_tokens, :]
     
     token_losses = torch.nn.CrossEntropyLoss(reduction='none')(
         shift_logits.view(-1, shift_logits.size(-1)),
@@ -79,16 +82,23 @@ def nll(inputs, outputs):
 
     return seq_losses.tolist()
 
-def output_divergence(outputs_base, outputs_perturb, tokenizer):
+def output_divergence(outputs_base, outputs_perturb, tokenizer, num_eval_tokens=0):
     text_base_out = tokenizer.batch_decode(torch.argmax(outputs_base.logits[:, :-1, :], dim=-1).cpu())
     text_ptb_out = tokenizer.batch_decode(torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1).cpu())
+
+    if num_eval_tokens > 0:
+        text_base_out = [x[:-num_eval_tokens] for x in text_base_out]
+        text_ptb_out = [x[:-num_eval_tokens] for x in text_ptb_out]
 
     return [Levenshtein.distance(x, y)/max(len(x), len(y)) for x, y in zip(text_base_out, text_ptb_out)]
 
 # Make robust
-def logit_kl(outputs_base, outputs_perturb):
+def logit_kl(outputs_base, outputs_perturb, num_eval_tokens=0):
     logits_base = outputs_base.logits[:, :-1, :]
     logits_ptb = outputs_perturb.logits[:, :-1, :]
+    if num_eval_tokens > 0:
+        logits_base = logits_base[:, :-num_eval_tokens, :]
+        logits_ptb = logits_ptb[:, :-num_eval_tokens, :]
 
     log_probs_base = torch.nn.functional.log_softmax(logits_base, dim=-1)
     probs_base = log_probs_base.exp()
@@ -118,7 +128,7 @@ def topk_divergence(outputs_base, outputs_perturb, k=50):
     return overlap_topk.flatten().tolist()
 
 # make robust
-def activation_similarity(outputs_base, outputs_perturb):
+def activation_similarity(outputs_base, outputs_perturb, num_eval_tokens=0):
     base_hidden = outputs_base.hidden_states
     ptb_hidden = outputs_perturb.hidden_states
 
@@ -127,6 +137,10 @@ def activation_similarity(outputs_base, outputs_perturb):
     for i, _ in enumerate(zip(base_hidden, ptb_hidden)):
         base_i = base_hidden[i][:, :-1, :]
         ptb_i = ptb_hidden[i][:, :-1, :]
+
+        if num_eval_tokens > 0:
+            base_i = base_i[:, :-num_eval_tokens, :]
+            ptb_i = ptb_i[:, :-num_eval_tokens, :]
 
         cos_sim = torch.cosine_similarity(base_i, ptb_i, dim=-1).clamp(-1, 1)
         ret[f'activation_cos_sim_layer_{i}'] = cos_sim.flatten().tolist()
@@ -158,7 +172,7 @@ def _drop_top_var_dims(X, Y, k):
     keep = torch.argsort(X.var(dim=0))[:-k]
     return X[:, keep], Y[:, keep]
 
-def activation_cka(outputs_base, outputs_perturb, k=DROP_K):
+def activation_cka(outputs_base, outputs_perturb, k=DROP_K, num_eval_tokens=0):
     """
     Per-sample representation similarity AFTER dropping the top-k highest-variance
     dims per layer. Those outlier dims (massive activations) confound both raw
@@ -175,6 +189,9 @@ def activation_cka(outputs_base, outputs_perturb, k=DROP_K):
         for b in range(n_samples):
             X = base_hidden[L][b, :-1, :].float()
             Y = ptb_hidden[L][b, :-1, :].float()
+            if num_eval_tokens > 0:
+                X = X[:-num_eval_tokens, :]
+                Y = Y[:-num_eval_tokens, :]
             Xs, Ys = _drop_top_var_dims(X, Y, k)
             cka_vals.append(_linear_cka(Xs, Ys))
             cos_vals.append(torch.cosine_similarity(Xs, Ys, dim=-1).mean().item())
@@ -182,7 +199,7 @@ def activation_cka(outputs_base, outputs_perturb, k=DROP_K):
         ret[f'activation_cos_stripped_layer_{L}'] = cos_vals
     return ret
 
-def attention_entropy(outputs):
+def attention_entropy(outputs, num_eval_tokens=0):
     attentions = outputs.attentions
     _, nh, _, _ = attentions[0].shape
 
@@ -190,6 +207,8 @@ def attention_entropy(outputs):
     for i in range(len(attentions)):
         for h in range(nh):
             head_att = attentions[i][:, h, :-1, :]
+            if num_eval_tokens > 0:
+                head_att = head_att[:, :-num_eval_tokens, :]
             seq_len = head_att.shape[-1]
             mask = head_att > 0
             safe_att = head_att.clamp(min=1e-9)

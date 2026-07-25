@@ -12,6 +12,16 @@ from src.perturbs import perturb
 from src.eval import eval_loop
 from config import MODEL_INFO
 
+def get_arg_string(args):
+    kv_pairs = []
+    for k, v in vars(args).items():
+        if isinstance(v, (str, int, float, bool)):
+            # Remove any non-alphanumeric characters from values (like paths or slashes)
+            clean_v = re.sub(r"[^a-zA-Z0-9.-]", "", str(v))
+            kv_pairs.append(f"{k}_{clean_v}")
+
+    return "___".join(kv_pairs)
+
 def run(args):
     start_time = time()
     SEQ_LEN = 128 if not args.debug else 5
@@ -61,12 +71,12 @@ def run(args):
     
     for ptb_pct in ptb_pcts:
         
-        texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer)
+        texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer, args.num_eval_tokens)
 
-        os.makedirs(f'results/{args.model}/{ptb_type}/{ptb_pct}', exist_ok=True)
+        os.makedirs(f'results/{get_arg_string(args)}/{ptb_pct}', exist_ok=True)
 
         try:
-            seen = set(pd.read_csv(f'results/{args.model}/{ptb_type}/{ptb_pct}/evals.csv')['sample'])
+            seen = set(pd.read_csv(f'results/{get_arg_string(args)}/{ptb_pct}/evals.csv')['sample'])
         except:
             seen = set()
 
@@ -84,14 +94,20 @@ def run(args):
                 outputs = model(**inputs, output_hidden_states= eval_hidden, output_attentions=eval_hidden)
                 outputs_perturbed = model(**inputs_perturbed, output_hidden_states=eval_hidden, output_attentions=eval_hidden)
             
-            res = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, i, output_only=(not eval_hidden))
+            res = eval_loop(
+                inputs, 
+                outputs, 
+                inputs_perturbed, 
+                outputs_perturbed, 
+                tokenizer, 
+                i, 
+                output_only=(not eval_hidden), 
+                num_eval_tokens=args.num_eval_tokens
+            )
 
             res = res[~res['sample'].isin(seen)]
-            if not args.debug:
-                res.to_csv(f'results/{args.model}/{ptb_type}/{ptb_pct}/evals.csv', 
-                                        mode='a', header=(i==0 and len(seen) == 0), index=False)
-            else:
-                res.to_csv(f'results/{args.model}/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
+            res.to_csv(f'results/{get_arg_string(args)}/{ptb_pct}/evals.csv',
+                        mode='a', header=(i==0 and len(seen) == 0), index=False)
             
             del outputs, outputs_perturbed
     print(f"Total time taken: {time() - start_time:.2f} seconds")
@@ -105,6 +121,7 @@ if __name__ == "__main__":
     parser.add_argument("--ptb-pct", help="Percent of input text perturbed", type=int, default=-1)
     parser.add_argument("--seed", help="Random seed", type=int, default=1)
     parser.add_argument("--debug", action='store_true')
+    parser.add_argument("-N", "--num-eval-tokens", help="If not 0, limit evaluation to last N tokens and don't perturb them", type=int, default=0)
 
     args = parser.parse_args()
 
