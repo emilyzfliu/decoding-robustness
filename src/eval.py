@@ -68,8 +68,8 @@ def nll(inputs, outputs, num_eval_tokens=0):
     shift_labels = labels[..., 1:].contiguous()
 
     if num_eval_tokens > 0:
-        shift_labels = shift_labels[:, :-num_eval_tokens]
-        shift_logits = shift_logits[:, :-num_eval_tokens, :]
+        shift_labels = shift_labels[:, -num_eval_tokens:]
+        shift_logits = shift_logits[:, -num_eval_tokens:, :]
     
     token_losses = torch.nn.CrossEntropyLoss(reduction='none')(
         shift_logits.view(-1, shift_logits.size(-1)),
@@ -87,8 +87,8 @@ def output_divergence(outputs_base, outputs_perturb, tokenizer, num_eval_tokens=
     text_ptb_out = tokenizer.batch_decode(torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1).cpu())
 
     if num_eval_tokens > 0:
-        text_base_out = [x[:-num_eval_tokens] for x in text_base_out]
-        text_ptb_out = [x[:-num_eval_tokens] for x in text_ptb_out]
+        text_base_out = [x[-num_eval_tokens:] for x in text_base_out]
+        text_ptb_out = [x[-num_eval_tokens:] for x in text_ptb_out]
 
     return [Levenshtein.distance(x, y)/max(len(x), len(y)) for x, y in zip(text_base_out, text_ptb_out)]
 
@@ -97,8 +97,8 @@ def logit_kl(outputs_base, outputs_perturb, num_eval_tokens=0):
     logits_base = outputs_base.logits[:, :-1, :]
     logits_ptb = outputs_perturb.logits[:, :-1, :]
     if num_eval_tokens > 0:
-        logits_base = logits_base[:, :-num_eval_tokens, :]
-        logits_ptb = logits_ptb[:, :-num_eval_tokens, :]
+        logits_base = logits_base[:, -num_eval_tokens:, :]
+        logits_ptb = logits_ptb[:, -num_eval_tokens:, :]
 
     log_probs_base = torch.nn.functional.log_softmax(logits_base, dim=-1)
     probs_base = log_probs_base.exp()
@@ -139,8 +139,8 @@ def activation_similarity(outputs_base, outputs_perturb, num_eval_tokens=0):
         ptb_i = ptb_hidden[i][:, :-1, :]
 
         if num_eval_tokens > 0:
-            base_i = base_i[:, :-num_eval_tokens, :]
-            ptb_i = ptb_i[:, :-num_eval_tokens, :]
+            base_i = base_i[:, -num_eval_tokens:, :]
+            ptb_i = ptb_i[:, -num_eval_tokens:, :]
 
         cos_sim = torch.cosine_similarity(base_i, ptb_i, dim=-1).clamp(-1, 1)
         ret[f'activation_cos_sim_layer_{i}'] = cos_sim.flatten().tolist()
@@ -190,8 +190,8 @@ def activation_cka(outputs_base, outputs_perturb, k=DROP_K, num_eval_tokens=0):
             X = base_hidden[L][b, :-1, :].float()
             Y = ptb_hidden[L][b, :-1, :].float()
             if num_eval_tokens > 0:
-                X = X[:-num_eval_tokens, :]
-                Y = Y[:-num_eval_tokens, :]
+                X = X[-num_eval_tokens:, :]
+                Y = Y[-num_eval_tokens:, :]
             Xs, Ys = _drop_top_var_dims(X, Y, k)
             cka_vals.append(_linear_cka(Xs, Ys))
             cos_vals.append(torch.cosine_similarity(Xs, Ys, dim=-1).mean().item())
@@ -208,7 +208,7 @@ def attention_entropy(outputs, num_eval_tokens=0):
         for h in range(nh):
             head_att = attentions[i][:, h, :-1, :]
             if num_eval_tokens > 0:
-                head_att = head_att[:, :-num_eval_tokens, :]
+                head_att = head_att[:, -num_eval_tokens:, :]
             seq_len = head_att.shape[-1]
             mask = head_att > 0
             safe_att = head_att.clamp(min=1e-9)
