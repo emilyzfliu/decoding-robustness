@@ -195,6 +195,7 @@ def activation_cka(outputs_base, outputs_perturb, k=DROP_K, num_eval_tokens=0):
             if num_eval_tokens > 0:
                 X = X[-num_eval_tokens:, :]
                 Y = Y[-num_eval_tokens:, :]
+                k = min(k, num_eval_tokens - 1)  # don't drop more than we have
             Xs, Ys = _drop_top_var_dims(X, Y, k)
             cka_vals.append(_linear_cka(Xs, Ys))
             cos_vals.append(torch.cosine_similarity(Xs, Ys, dim=-1).mean().item())
