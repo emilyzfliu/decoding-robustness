@@ -11,7 +11,7 @@ export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
 for model in 'gpt2' do #'gpt2-medium' 'gpt2-large' 'gpt2-xl'; do
     for ptb_type in 'char' 'token' 'shuffle'; do
-        for last_n_tok in 1 5 10 25 50 do
+        for last_n_tok in 1 5 10 25 50; do
             python main.py --model $model --ptb-type $ptb_type --num-eval-tokens $last_n_tok
         done
     done
