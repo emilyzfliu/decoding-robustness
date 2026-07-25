@@ -26,12 +26,12 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
     # TODO: Logit KL on only the last n ptbs
     if output_only:
         tok_level = pd.DataFrame({
-            **get_sample_and_token_indices(inputs_base),
+            **get_sample_and_token_indices(inputs_base, num_eval_tokens=num_eval_tokens),
             'logit_kl': logit_kl(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens)
         })
     else:
         tok_level = pd.DataFrame({
-            **get_sample_and_token_indices(inputs_base),
+            **get_sample_and_token_indices(inputs_base, num_eval_tokens=num_eval_tokens),
             **activation_similarity(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens),
             **attention_entropy(outputs_perturb, num_eval_tokens=num_eval_tokens),
             'logit_kl': logit_kl(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens),
