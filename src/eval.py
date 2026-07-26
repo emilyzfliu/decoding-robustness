@@ -86,12 +86,15 @@ def nll(inputs, outputs, num_eval_tokens=0):
     return seq_losses.tolist()
 
 def output_divergence(outputs_base, outputs_perturb, tokenizer, num_eval_tokens=0):
-    text_base_out = tokenizer.batch_decode(torch.argmax(outputs_base.logits[:, :-1, :], dim=-1).cpu())
-    text_ptb_out = tokenizer.batch_decode(torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1).cpu())
+    ids_base = torch.argmax(outputs_base.logits[:, :-1, :], dim=-1)
+    ids_ptb = torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1)
 
     if num_eval_tokens > 0:
-        text_base_out = [x[-num_eval_tokens:] for x in text_base_out]
-        text_ptb_out = [x[-num_eval_tokens:] for x in text_ptb_out]
+        ids_base = ids_base[:, -num_eval_tokens:]
+        ids_ptb = ids_ptb[:, -num_eval_tokens:]
+
+    text_base_out = tokenizer.batch_decode(ids_base.cpu())
+    text_ptb_out = tokenizer.batch_decode(ids_ptb.cpu())
 
     return [Levenshtein.distance(x, y)/max(len(x), len(y)) for x, y in zip(text_base_out, text_ptb_out)]
 

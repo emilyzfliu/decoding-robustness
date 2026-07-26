@@ -4,6 +4,8 @@
 # GPU to run on (override with: CUDA_VISIBLE_DEVICES=2 bash experiments.sh)
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
+pip install transformers datasets scipy Levenshtein
+
 # Base experiments
 # python main.py --model 'gpt2' --ptb-type 'char'
 # python main.py --model 'gpt2' --ptb-type 'token'
