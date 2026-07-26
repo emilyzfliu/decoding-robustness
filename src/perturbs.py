@@ -3,6 +3,7 @@ File for all perturbation implementations.
 Outside code should only ever call function `perturb`
 """
 import string
+from copy import deepcopy
 
 def perturb(texts, perturb_pct, rng, ptb_type, tokenizer, num_eval_tokens=0):
     if ptb_type == 'char':
@@ -24,8 +25,9 @@ def character_substitution(texts, perturb_pct, rng, num_eval_tokens=0):
     for text in texts:
         word = []
         if num_eval_tokens > 0:
-            text = ' '.join(text.split()[:-num_eval_tokens])
-            holdout = ' '.join(text.split()[-num_eval_tokens:])
+            orig = text
+            text = ' '.join(orig.split()[:-num_eval_tokens])
+            holdout = ' '.join(orig.split()[-num_eval_tokens:])
         for c in text:
             if rng.randint(1, 100) < perturb_pct:
                 word.append(rng.choice(sub_pool))
@@ -51,8 +53,9 @@ def token_substitution(texts, perturb_pct, rng, tokenizer, max_length=128, num_e
     ret = []
     for input_ids in encodings['input_ids']:
         if num_eval_tokens > 0:
-            input_ids = input_ids[:-num_eval_tokens]
-            holdout = input_ids[-num_eval_tokens:]
+            orig_ids = deepcopy(input_ids)
+            input_ids = orig_ids[:-num_eval_tokens]
+            holdout = orig_ids[-num_eval_tokens:]
         
         new_ids = [
             rng.randint(0, tokenizer.vocab_size - 1) 
@@ -76,8 +79,9 @@ def token_shuffle(texts, perturb_pct, rng, num_eval_tokens=0):
     for text in texts:
         toks = text.split()
         if num_eval_tokens > 0:
-            toks = toks[:-num_eval_tokens]
-            holdout = toks[-num_eval_tokens:]
+            orig = deepcopy(toks)
+            toks = orig[:-num_eval_tokens]
+            holdout = orig[-num_eval_tokens:]
         shuffle_window = int(perturb_pct*len(toks) / 100)
 
         start = rng.randint(0, len(toks) - shuffle_window - 1) if perturb_pct < 100 else 0
