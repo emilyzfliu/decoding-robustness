@@ -4,7 +4,7 @@ MODEL_INFO = {
         'num_layers': 12,
         'num_heads': 12,
         'attn_implementation': 'eager',
-        'eval_hidden_states': True,},
+        'eval_hidden_states': False,},
     'gpt2-medium': {
         'model_name': 'openai-community/gpt2-medium',
         'num_layers': 24,

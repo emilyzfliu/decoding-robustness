@@ -12,8 +12,9 @@ from scipy.stats import entropy
 def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokenizer, i, output_only=False, num_eval_tokens=0):
     seq_cols = {
         'sample': [x for x in range(outputs_base.logits.shape[0])],
-        'nll': nll(inputs_perturb, outputs_perturb, num_eval_tokens=num_eval_tokens),
-        'output_divergence': output_divergence(outputs_base, outputs_perturb, tokenizer, num_eval_tokens=num_eval_tokens),
+        **nll(inputs_perturb, outputs_perturb, num_eval_tokens=num_eval_tokens),
+        **output_divergence(outputs_base, outputs_perturb, tokenizer, num_eval_tokens=num_eval_tokens),
+        **logit_kl(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens),
     }
     # Per-sample linear CKA: a representation-similarity metric robust to the
     # massive-activation outlier dims that inflate raw cosine at late layers.
@@ -23,22 +24,24 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
 
     seq_level['sample'] = [x+i*4 for x in seq_level['sample']]
 
+    return seq_level
+
     # TODO: Logit KL on only the last n ptbs
-    if output_only:
-        tok_level = pd.DataFrame({
-            **get_sample_and_token_indices(inputs_base, num_eval_tokens=num_eval_tokens),
-            'logit_kl': logit_kl(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens)
-        })
-    else:
-        tok_level = pd.DataFrame({
-            **get_sample_and_token_indices(inputs_base, num_eval_tokens=num_eval_tokens),
-            **activation_similarity(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens),
-            **attention_entropy(outputs_perturb, num_eval_tokens=num_eval_tokens),
-            'logit_kl': logit_kl(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens),
-        })
-    tok_level['sample'] = [x+i*4 for x in tok_level['sample']]
-    tok_level = tok_level.groupby('sample',as_index=False).mean()
-    return pd.merge(seq_level, tok_level, on='sample', how='inner')
+    # if output_only:
+    #     tok_level = pd.DataFrame({
+    #         **get_sample_and_token_indices(inputs_base, num_eval_tokens=num_eval_tokens),
+    #         'logit_kl': logit_kl(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens)
+    #     })
+    # else:
+    #     tok_level = pd.DataFrame({
+    #         **get_sample_and_token_indices(inputs_base, num_eval_tokens=num_eval_tokens),
+    #         **activation_similarity(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens),
+    #         **attention_entropy(outputs_perturb, num_eval_tokens=num_eval_tokens),
+    #         'logit_kl': logit_kl(outputs_base, outputs_perturb, num_eval_tokens=num_eval_tokens),
+    #     })
+    # tok_level['sample'] = [x+i*4 for x in tok_level['sample']]
+    # tok_level = tok_level.groupby('sample',as_index=False).mean()
+    # return pd.merge(seq_level, tok_level, on='sample', how='inner')
 
 def get_sample_and_token_indices(inputs_base, num_eval_tokens=0):
     n_samples, sample_length = inputs_base.input_ids.shape
@@ -61,6 +64,10 @@ def get_sample_and_token_indices(inputs_base, num_eval_tokens=0):
     }
 
 def nll(inputs, outputs, num_eval_tokens=0):
+    ret = {
+        'nll': []
+    }
+
     input_ids = inputs.input_ids
     attention_mask = inputs.attention_mask
     
@@ -80,12 +87,27 @@ def nll(inputs, outputs, num_eval_tokens=0):
     ).reshape(input_ids.size(0), -1) 
     
     mask = (shift_labels != -100).float()
-    seq_losses = (token_losses * mask).sum(dim=1) / mask.sum(dim=1)
-    # seq_perplexities = torch.exp(seq_losses)
+    ret['nll'] = ((token_losses * mask).sum(dim=1) / mask.sum(dim=1)).tolist()
 
-    return seq_losses.tolist()
+    if num_eval_tokens > 0:
+        # include per-token NLL
+        for tok in range(num_eval_tokens):
+            shift_labels_tok = shift_labels[:, tok:tok+1]
+            shift_logits_tok = shift_logits[:, tok:tok+1, :]
+            token_loss = torch.nn.CrossEntropyLoss(reduction='none')(
+                shift_logits_tok.reshape(-1, shift_logits_tok.size(-1)),
+                shift_labels_tok.reshape(-1)
+            ).reshape(input_ids.size(0), -1)
+            mask = (shift_labels_tok != -100).float()
+            ret[f'nll_tok_{tok}'] = ((token_loss * mask).sum(dim=1) / mask.sum(dim=1)).tolist()
+
+    return ret
 
 def output_divergence(outputs_base, outputs_perturb, tokenizer, num_eval_tokens=0):
+    ret = {
+        'output_divergence': []
+    }
+
     ids_base = torch.argmax(outputs_base.logits[:, :-1, :], dim=-1)
     ids_ptb = torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1)
 
@@ -96,10 +118,17 @@ def output_divergence(outputs_base, outputs_perturb, tokenizer, num_eval_tokens=
     text_base_out = tokenizer.batch_decode(ids_base.cpu())
     text_ptb_out = tokenizer.batch_decode(ids_ptb.cpu())
 
-    return [Levenshtein.distance(x, y)/max(len(x), len(y)) for x, y in zip(text_base_out, text_ptb_out)]
+    ret['output_divergence'] = [Levenshtein.distance(x, y)/max(len(x), len(y)) for x, y in zip(text_base_out, text_ptb_out)]
+    ret['base_output'] = text_base_out
+    ret['perturbed_output'] = text_ptb_out
+
+    return ret
 
 # Make robust
 def logit_kl(outputs_base, outputs_perturb, num_eval_tokens=0):
+    ret = {
+        'logit_kl': []
+    }
     logits_base = outputs_base.logits[:, :-1, :]
     logits_ptb = outputs_perturb.logits[:, :-1, :]
     if num_eval_tokens > 0:
@@ -111,7 +140,13 @@ def logit_kl(outputs_base, outputs_perturb, num_eval_tokens=0):
     log_probs_ptb = torch.nn.functional.log_softmax(logits_ptb, dim=-1)
 
     kl = torch.sum(probs_base * (log_probs_base - log_probs_ptb), dim=-1)
-    return kl.flatten().tolist()
+
+    ret['logit_kl'] = kl.mean(dim=-1).tolist()
+
+    if num_eval_tokens > 0:
+        for tok in range(num_eval_tokens):
+            ret[f'logit_kl_token_{tok}'] = kl[:, tok].tolist()
+    return ret
 
 def topk_divergence(outputs_base, outputs_perturb, k=50):
     cutoffs_base = torch.min(torch.topk(outputs_base.logits[:, :-1, :], k, dim=-1).values, dim=-1, keepdims=True).values
