@@ -203,8 +203,8 @@ panel_idx += 1
 if has_twonn:
     twonn_bpe = [df_bpe[f'intrinsic_dim_change_layer_{i}'].mean() for i in range(12)]
     twonn_word = [df_word[f'intrinsic_dim_change_layer_{i}'].mean() for i in range(12)]
-    axs[panel_idx].bar(x - 0.175, twonn_bpe, 0.35, label='BPE Token', color='#2166ac', alpha=0.85)
-    axs[panel_idx].bar(x + 0.175, twonn_word, 0.35, label='Word-Level', color='#d6604d', alpha=0.85)
+    axs[panel_idx].plot(x, twonn_bpe, 'o-', color='#2166ac', label='BPE Token', linewidth=2, markersize=6)
+    axs[panel_idx].plot(x, twonn_word, 's-', color='#d6604d', label='Word-Level', linewidth=2, markersize=6)
     axs[panel_idx].axhline(0, color='black', linewidth=0.5)
     axs[panel_idx].set_xlabel('Layer')
     axs[panel_idx].set_ylabel('TwoNN Dim Change')
@@ -212,15 +212,15 @@ if has_twonn:
     axs[panel_idx].set_xticks(x)
     axs[panel_idx].set_xticklabels([f'L{i}' for i in range(12)])
     axs[panel_idx].legend()
-    axs[panel_idx].grid(True, alpha=0.2, axis='y')
+    axs[panel_idx].grid(True, alpha=0.3)
     panel_idx += 1
 
 # Panel 3: MKNN
 if has_mknn:
     mknn_bpe = [df_bpe[f'intrinsic_dim_mknn_change_layer_{i}'].mean() for i in range(12)]
     mknn_word = [df_word[f'intrinsic_dim_mknn_change_layer_{i}'].mean() for i in range(12)]
-    axs[panel_idx].bar(x - 0.175, mknn_bpe, 0.35, label='BPE Token', color='#2166ac', alpha=0.85)
-    axs[panel_idx].bar(x + 0.175, mknn_word, 0.35, label='Word-Level', color='#d6604d', alpha=0.85)
+    axs[panel_idx].plot(x, mknn_bpe, 'o-', color='#2166ac', label='BPE Token', linewidth=2, markersize=6)
+    axs[panel_idx].plot(x, mknn_word, 's-', color='#d6604d', label='Word-Level', linewidth=2, markersize=6)
     axs[panel_idx].axhline(0, color='black', linewidth=0.5)
     axs[panel_idx].set_xlabel('Layer')
     axs[panel_idx].set_ylabel('MKNN Dim Change')
@@ -228,7 +228,7 @@ if has_mknn:
     axs[panel_idx].set_xticks(x)
     axs[panel_idx].set_xticklabels([f'L{i}' for i in range(12)])
     axs[panel_idx].legend()
-    axs[panel_idx].grid(True, alpha=0.2, axis='y')
+    axs[panel_idx].grid(True, alpha=0.3)
     panel_idx += 1
 
 plt.tight_layout()
