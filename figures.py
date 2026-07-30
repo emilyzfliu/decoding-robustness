@@ -445,3 +445,56 @@ for i, PTB_TYPE in enumerate(ptb_types):
 plt.savefig(f'figures/stripped_cka_heatmap.png', bbox_inches='tight', dpi=150)
 
 ####################
+
+##### Figure 8: BPE vs Word-Level Comparison #####
+
+def load_bpe_word_data(metric_prefix, layer_agg='mean'):
+    percentages = [5, 10, 25, 50]
+    results = {'token': [], 'word': []}
+    
+    for ptb_type in ['token', 'word']:
+        for pct in percentages:
+            try:
+                df = pd.read_csv(f'results/compare_bpe_word/{ptb_type}/{pct}/evals.csv')
+                metric_cols = [c for c in df.columns if c.startswith(metric_prefix)]
+                if metric_cols:
+                    if layer_agg == 'mean':
+                        layer_values = [df[col].mean() for col in metric_cols]
+                        results[ptb_type].append(np.mean(layer_values))
+                    else:
+                        vals = [df[col].mean() for col in metric_cols if any(f'_{l}' in col for l in layer_agg)]
+                        results[ptb_type].append(np.mean(vals) if vals else 0)
+                else:
+                    results[ptb_type].append(0)
+            except FileNotFoundError:
+                results[ptb_type].append(0)
+    
+    return results
+
+fig, axs = plt.subplots(1, 3, figsize=(18, 5))
+fig.suptitle('BPE vs Word-Level Substitution: Representation Metrics', fontsize=14)
+
+metrics_config = [
+    ('cka', 'CKA (↑ = more similar)'),
+    ('intrinsic_dim_change', 'TwoNN Intrinsic Dim Change\n(↑ = expansion)'),
+    ('intrinsic_dim_mknn_change', 'MKNN Intrinsic Dim Change\n(↑ = expansion)'),
+]
+
+for idx, (metric_prefix, ylabel) in enumerate(metrics_config):
+    data = load_bpe_word_data(metric_prefix)
+    xs = [5, 10, 25, 50]
+    
+    axs[idx].plot(xs, data['token'], marker='o', linewidth=2, label='BPE Token Substitution', color='#2166ac')
+    axs[idx].plot(xs, data['word'], marker='s', linewidth=2, label='Word-Level Substitution', color='#d6604d')
+    
+    axs[idx].set_xlabel('Perturbation %')
+    axs[idx].set_ylabel(ylabel)
+    axs[idx].set_title(ylabel.split('(')[0].strip())
+    axs[idx].legend()
+    axs[idx].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.savefig('results/bpe_vs_word_comparison.png', bbox_inches='tight', dpi=150)
+print("Saved results/bpe_vs_word_comparison.png")
+
+####################

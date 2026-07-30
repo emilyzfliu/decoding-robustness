@@ -4,15 +4,47 @@ Outside code should only ever call function `perturb`
 """
 import string
 
+# QWERTY keyboard adjacency map for realistic typo simulation
+QWERTY_ADJACENT = {
+    'q': ['w', 'a'], 'w': ['q', 'e', 's', 'a'], 'e': ['w', 'r', 'd', 's'],
+    'r': ['e', 't', 'f', 'd'], 't': ['r', 'y', 'g', 'f'], 'y': ['t', 'u', 'h', 'g'],
+    'u': ['y', 'i', 'j', 'h'], 'i': ['u', 'o', 'k', 'j'], 'o': ['i', 'p', 'l', 'k'],
+    'p': ['o', '[', 'l'], 'a': ['q', 'w', 's', 'z'], 's': ['w', 'e', 'a', 'd', 'x', 'z'],
+    'd': ['e', 'r', 's', 'f', 'c', 'x'], 'f': ['r', 't', 'd', 'g', 'v', 'c'],
+    'g': ['t', 'y', 'f', 'h', 'b', 'v'], 'h': ['y', 'u', 'g', 'j', 'n', 'b'],
+    'j': ['u', 'i', 'h', 'k', 'm', 'n'], 'k': ['i', 'o', 'j', 'l', 'm'],
+    'l': ['o', 'p', 'k', ';'], 'z': ['a', 's', 'x'], 'x': ['s', 'd', 'z', 'c'],
+    'c': ['d', 'f', 'x', 'v'], 'v': ['f', 'g', 'c', 'b'],
+    'b': ['g', 'h', 'v', 'n'], 'n': ['h', 'j', 'b', 'm'],
+    'm': ['j', 'k', 'n'],
+}
+
+# Common punctuation typos (adjacent on keyboard or commonly confused)
+PUNCT_TYPOS = {
+    '.': [',', '?', '!'],
+    ',': ['.', ';'],
+    '?': ['.', '!'],
+    '!': ['.', '?'],
+    ';': [',', ':'],
+    ':': [';', '.'],
+    "'": ['"', '`'],
+    '"': ["'", '`'],
+}
+
+
 def perturb(texts, perturb_pct, rng, ptb_type, tokenizer):
     if ptb_type == 'char':
         return character_substitution(texts, perturb_pct, rng)
     elif ptb_type == 'token':
         return token_substitution(texts, perturb_pct, rng, tokenizer)
+    elif ptb_type == 'word':
+        return word_substitution(texts, perturb_pct, rng, tokenizer)
     elif ptb_type == 'shuffle':
-        return token_shuffle(texts, perturb_pct, rng)
+        return token_shuffle(texts, perturb_pct, rng, tokenizer=tokenizer)
+    elif ptb_type == 'typo':
+        return typo_perturbation(texts, perturb_pct, rng)
     else:
-        raise TypeError("ptb_type must be one of ['char', 'token', 'shuffle']")
+        raise TypeError("ptb_type must be one of ['char', 'token', 'word', 'shuffle', 'typo']")
     
 
 def character_substitution(texts, perturb_pct, rng):
@@ -30,6 +62,28 @@ def character_substitution(texts, perturb_pct, rng):
                 word.append(c)
         ret.append(''.join(word))
     return ret
+
+
+def typo_perturbation(texts, perturb_pct, rng):
+    """
+    Introduce realistic typos based on QWERTY keyboard adjacency.
+    """
+    ret = []
+    for text in texts:
+        chars = list(text)
+        for i, c in enumerate(chars):
+            if c.lower() in QWERTY_ADJACENT and rng.randint(1, 100) <= perturb_pct:
+                adj = QWERTY_ADJACENT[c.lower()]
+                replacement = rng.choice(adj)
+                # Preserve capitalization
+                if c.isupper():
+                    replacement = replacement.upper()
+                chars[i] = replacement
+            elif c in PUNCT_TYPOS and rng.randint(1, 100) <= perturb_pct:
+                chars[i] = rng.choice(PUNCT_TYPOS[c])
+        ret.append(''.join(chars))
+    return ret
+
 
 def token_substitution(texts, perturb_pct, rng, tokenizer, max_length=128):
     """
@@ -55,20 +109,99 @@ def token_substitution(texts, perturb_pct, rng, tokenizer, max_length=128):
     return ret
 
 
-def token_shuffle(texts, perturb_pct, rng):
+# Cache for word vocabulary (built once, shared across calls)
+_WORD_VOCAB_CACHE = {}
+
+def _get_word_vocab(tokenizer):
+    """Build and cache a word-level vocabulary from the tokenizer."""
+    cache_key = tokenizer.name_or_path if hasattr(tokenizer, 'name_or_path') else str(id(tokenizer))
+    
+    if cache_key in _WORD_VOCAB_CACHE:
+        return _WORD_VOCAB_CACHE[cache_key]
+    
+    # Build vocabulary by decoding first 10000 tokens and extracting alphabetic words
+    word_set = set()
+    for i in range(min(10000, tokenizer.vocab_size)):
+        decoded = tokenizer.decode([i]).strip()
+        if len(decoded) > 1 and decoded.isalpha():
+            word_set.add(decoded)
+    
+    # Fallback to scanning full vocab if not enough words found
+    if len(word_set) < 1000:
+        for token, tid in tokenizer.vocab.items():
+            decoded = tokenizer.decode([tid]).strip()
+            if len(decoded) > 1 and decoded.isalpha():
+                word_set.add(decoded)
+    
+    word_vocab = list(word_set)
+    _WORD_VOCAB_CACHE[cache_key] = word_vocab
+    return word_vocab
+
+
+def word_substitution(texts, perturb_pct, rng, tokenizer, max_length=128):
     """
-    Scramble around words in the text.
+    Substitute random WORDS (whitespace-separated) from the tokenizer vocabulary.
     """
+    word_vocab = _get_word_vocab(tokenizer)
+    
     ret = []
     for text in texts:
-        toks = text.split()
-        shuffle_window = int(perturb_pct*len(toks) / 100)
+        words = text.split()
+        n_words = len(words)
+        n_to_replace = max(1, int(perturb_pct * n_words / 100))
+        
+        # Select random word positions to replace
+        positions = rng.sample(range(n_words), min(n_to_replace, n_words))
+        
+        words_list = list(words)
+        for pos in positions:
+            words_list[pos] = rng.choice(word_vocab)
+        
+        ret.append(' '.join(words_list))
+    
+    return ret
 
-        start = rng.randint(0, len(toks) - shuffle_window - 1) if perturb_pct < 100 else 0
 
-        tok_to_shuffle = toks[start:start+shuffle_window]
-        rng.shuffle(tok_to_shuffle)
-
-        new_toks = toks[:start] + tok_to_shuffle + toks[start+shuffle_window:]
-        ret.append(' '.join(new_toks))
+def token_shuffle(texts, perturb_pct, rng, tokenizer=None, max_length=128):
+    """
+    Scramble tokens in the BPE-tokenized sequence.
+    """
+    if tokenizer is None:
+        # Fallback: whitespace-based (original behavior)
+        ret = []
+        for text in texts:
+            toks = text.split()
+            shuffle_window = int(perturb_pct*len(toks) / 100)
+            start = rng.randint(0, len(toks) - shuffle_window - 1) if perturb_pct < 100 else 0
+            tok_to_shuffle = toks[start:start+shuffle_window]
+            rng.shuffle(tok_to_shuffle)
+            new_toks = toks[:start] + tok_to_shuffle + toks[start+shuffle_window:]
+            ret.append(' '.join(new_toks))
+        return ret
+    
+    # BPE token-level shuffling
+    encodings = tokenizer(
+        texts,
+        truncation=True,
+        max_length=max_length,
+        add_special_tokens=False
+    )
+    
+    ret = []
+    for input_ids in encodings['input_ids']:
+        n_tokens = len(input_ids)
+        shuffle_window = max(1, int(perturb_pct * n_tokens / 100))
+        
+        # Select contiguous window
+        if perturb_pct < 100:
+            start = rng.randint(0, n_tokens - shuffle_window)
+        else:
+            start = 0
+            shuffle_window = n_tokens
+        
+        window = list(input_ids[start:start + shuffle_window])
+        rng.shuffle(window)
+        
+        new_ids = list(input_ids[:start]) + window + list(input_ids[start + shuffle_window:])
+        ret.append(tokenizer.decode(new_ids))
     return ret
