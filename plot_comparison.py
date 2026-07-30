@@ -10,6 +10,16 @@ import numpy as np
 import os
 
 
+def get_cka_prefix(df):
+    """Auto-detect CKA column prefix (activation_cka_ or cka_)."""
+    for c in df.columns:
+        if c.startswith('activation_cka_layer_'):
+            return 'activation_cka_'
+        if c.startswith('cka_layer_'):
+            return 'cka_'
+    return 'activation_cka_'
+
+
 def load_bpe_word_data(metric_prefix, layer_agg='mean'):
     """Load BPE vs word comparison data for a given metric prefix."""
     percentages = [5, 10, 25, 50]
@@ -48,7 +58,7 @@ fig, axs = plt.subplots(1, 3, figsize=(18, 5))
 fig.suptitle('BPE vs Word-Level Substitution: Representation Metrics', fontsize=14, fontweight='bold')
 
 metrics_config = [
-    ('cka', 'CKA (1 = identical)'),
+    ('activation_cka', 'CKA (1 = identical)'),
     ('intrinsic_dim_change', 'TwoNN Intrinsic Dim Change\n(positive = expansion)'),
     ('intrinsic_dim_mknn_change', 'MKNN Intrinsic Dim Change\n(positive = expansion)'),
 ]
@@ -83,9 +93,10 @@ for idx, pct in enumerate([5, 10, 25, 50]):
     
     df_bpe = pd.read_csv(f'results/compare_bpe_word/token/{pct}/evals.csv')
     df_word = pd.read_csv(f'results/compare_bpe_word/word/{pct}/evals.csv')
+    cka_prefix = get_cka_prefix(df_bpe)
     
-    cka_bpe = [df_bpe[f'cka_layer_{i}'].mean() for i in range(12)]
-    cka_word = [df_word[f'cka_layer_{i}'].mean() for i in range(12)]
+    cka_bpe = [df_bpe[f'{cka_prefix}layer_{i}'].mean() for i in range(12)]
+    cka_word = [df_word[f'{cka_prefix}layer_{i}'].mean() for i in range(12)]
     
     x = np.arange(12)
     width = 0.35
@@ -106,120 +117,119 @@ plt.tight_layout()
 plt.savefig('results/bpe_vs_word_per_layer_cka.png', bbox_inches='tight', dpi=150)
 print("Saved results/bpe_vs_word_per_layer_cka.png")
 
-# Figure 3: TwoNN intrinsic dim per layer at each perturbation level
-fig, axs = plt.subplots(2, 2, figsize=(14, 10))
-fig.suptitle('Per-Layer TwoNN Intrinsic Dimension Change', fontsize=14, fontweight='bold')
+# Check if TwoNN/MKNN columns exist before plotting
+df_sample = pd.read_csv('results/compare_bpe_word/token/5/evals.csv')
+has_twonn = any('intrinsic_dim_change_' in c for c in df_sample.columns)
+has_mknn = any('intrinsic_dim_mknn_change_' in c for c in df_sample.columns)
 
-for idx, pct in enumerate([5, 10, 25, 50]):
-    row, col = idx // 2, idx % 2
-    ax = axs[row, col]
-    
-    df_bpe = pd.read_csv(f'results/compare_bpe_word/token/{pct}/evals.csv')
-    df_word = pd.read_csv(f'results/compare_bpe_word/word/{pct}/evals.csv')
-    
-    twonn_bpe = [df_bpe[f'intrinsic_dim_change_layer_{i}'].mean() for i in range(12)]
-    twonn_word = [df_word[f'intrinsic_dim_change_layer_{i}'].mean() for i in range(12)]
-    
-    x = np.arange(12)
-    width = 0.35
-    
-    ax.bar(x - width/2, twonn_bpe, width, label='BPE Token', color='#2166ac', alpha=0.85)
-    ax.bar(x + width/2, twonn_word, width, label='Word-Level', color='#d6604d', alpha=0.85)
-    
-    ax.axhline(0, color='black', linewidth=0.5)
-    ax.set_xlabel('Layer')
-    ax.set_ylabel('Intrinsic Dim Change')
-    ax.set_title(f'{pct}% Perturbation')
-    ax.set_xticks(x)
-    ax.set_xticklabels([f'L{i}' for i in range(12)])
-    ax.legend()
-    ax.grid(True, alpha=0.2, axis='y')
+if has_twonn:
+    # Figure 3: TwoNN intrinsic dim per layer
+    fig, axs = plt.subplots(2, 2, figsize=(14, 10))
+    fig.suptitle('Per-Layer TwoNN Intrinsic Dimension Change', fontsize=14, fontweight='bold')
+    for idx, pct in enumerate([5, 10, 25, 50]):
+        row, col = idx // 2, idx % 2
+        ax = axs[row, col]
+        df_bpe = pd.read_csv(f'results/compare_bpe_word/token/{pct}/evals.csv')
+        df_word = pd.read_csv(f'results/compare_bpe_word/word/{pct}/evals.csv')
+        twonn_bpe = [df_bpe[f'intrinsic_dim_change_layer_{i}'].mean() for i in range(12)]
+        twonn_word = [df_word[f'intrinsic_dim_change_layer_{i}'].mean() for i in range(12)]
+        x = np.arange(12); width = 0.35
+        ax.bar(x - width/2, twonn_bpe, width, label='BPE Token', color='#2166ac', alpha=0.85)
+        ax.bar(x + width/2, twonn_word, width, label='Word-Level', color='#d6604d', alpha=0.85)
+        ax.axhline(0, color='black', linewidth=0.5)
+        ax.set_xlabel('Layer'); ax.set_ylabel('TwoNN Dim Change'); ax.set_title(f'{pct}%')
+        ax.set_xticks(x); ax.set_xticklabels([f'L{i}' for i in range(12)])
+        ax.legend(); ax.grid(True, alpha=0.2, axis='y')
+    plt.tight_layout()
+    plt.savefig('results/bpe_vs_word_twonn_per_layer.png', bbox_inches='tight', dpi=150)
+    print("Saved results/bpe_vs_word_twonn_per_layer.png")
+else:
+    print("Skipping TwoNN figures (data not available)")
 
-plt.tight_layout()
-plt.savefig('results/bpe_vs_word_twonn_per_layer.png', bbox_inches='tight', dpi=150)
-print("Saved results/bpe_vs_word_twonn_per_layer.png")
+if has_mknn:
+    # Figure 4: MKNN intrinsic dim per layer
+    fig, axs = plt.subplots(2, 2, figsize=(14, 10))
+    fig.suptitle('Per-Layer MKNN Intrinsic Dimension Change', fontsize=14, fontweight='bold')
+    for idx, pct in enumerate([5, 10, 25, 50]):
+        row, col = idx // 2, idx % 2
+        ax = axs[row, col]
+        df_bpe = pd.read_csv(f'results/compare_bpe_word/token/{pct}/evals.csv')
+        df_word = pd.read_csv(f'results/compare_bpe_word/word/{pct}/evals.csv')
+        mknn_bpe = [df_bpe[f'intrinsic_dim_mknn_change_layer_{i}'].mean() for i in range(12)]
+        mknn_word = [df_word[f'intrinsic_dim_mknn_change_layer_{i}'].mean() for i in range(12)]
+        x = np.arange(12); width = 0.35
+        ax.bar(x - width/2, mknn_bpe, width, label='BPE Token', color='#2166ac', alpha=0.85)
+        ax.bar(x + width/2, mknn_word, width, label='Word-Level', color='#d6604d', alpha=0.85)
+        ax.axhline(0, color='black', linewidth=0.5)
+        ax.set_xlabel('Layer'); ax.set_ylabel('MKNN Dim Change'); ax.set_title(f'{pct}%')
+        ax.set_xticks(x); ax.set_xticklabels([f'L{i}' for i in range(12)])
+        ax.legend(); ax.grid(True, alpha=0.2, axis='y')
+    plt.tight_layout()
+    plt.savefig('results/bpe_vs_word_mknn_per_layer.png', bbox_inches='tight', dpi=150)
+    print("Saved results/bpe_vs_word_mknn_per_layer.png")
+else:
+    print("Skipping MKNN figures (data not available)")
 
-# Figure 4: MKNN intrinsic dim per layer
-fig, axs = plt.subplots(2, 2, figsize=(14, 10))
-fig.suptitle('Per-Layer MKNN Intrinsic Dimension Change', fontsize=14, fontweight='bold')
-
-for idx, pct in enumerate([5, 10, 25, 50]):
-    row, col = idx // 2, idx % 2
-    ax = axs[row, col]
-    
-    df_bpe = pd.read_csv(f'results/compare_bpe_word/token/{pct}/evals.csv')
-    df_word = pd.read_csv(f'results/compare_bpe_word/word/{pct}/evals.csv')
-    
-    mknn_bpe = [df_bpe[f'intrinsic_dim_mknn_change_layer_{i}'].mean() for i in range(12)]
-    mknn_word = [df_word[f'intrinsic_dim_mknn_change_layer_{i}'].mean() for i in range(12)]
-    
-    x = np.arange(12)
-    width = 0.35
-    
-    ax.bar(x - width/2, mknn_bpe, width, label='BPE Token', color='#2166ac', alpha=0.85)
-    ax.bar(x + width/2, mknn_word, width, label='Word-Level', color='#d6604d', alpha=0.85)
-    
-    ax.axhline(0, color='black', linewidth=0.5)
-    ax.set_xlabel('Layer')
-    ax.set_ylabel('MKNN Intrinsic Dim Change')
-    ax.set_title(f'{pct}% Perturbation')
-    ax.set_xticks(x)
-    ax.set_xticklabels([f'L{i}' for i in range(12)])
-    ax.legend()
-    ax.grid(True, alpha=0.2, axis='y')
-
-plt.tight_layout()
-plt.savefig('results/bpe_vs_word_mknn_per_layer.png', bbox_inches='tight', dpi=150)
-print("Saved results/bpe_vs_word_mknn_per_layer.png")
-
-# Figure 5: Combined view - all metrics at 25%
-fig, axs = plt.subplots(1, 3, figsize=(15, 5))
-fig.suptitle('All Metrics at 25% Perturbation (Per Layer)', fontsize=14, fontweight='bold')
-
+# Figure 5: Combined view - All metrics at 25% perturbation
 pct = 25
 df_bpe = pd.read_csv(f'results/compare_bpe_word/token/{pct}/evals.csv')
 df_word = pd.read_csv(f'results/compare_bpe_word/word/{pct}/evals.csv')
+cka_prefix = get_cka_prefix(df_bpe)
 
-# CKA
-cka_bpe = [df_bpe[f'cka_layer_{i}'].mean() for i in range(12)]
-cka_word = [df_word[f'cka_layer_{i}'].mean() for i in range(12)]
-axs[0].plot(range(12), cka_bpe, 'o-', color='#2166ac', label='BPE Token')
-axs[0].plot(range(12), cka_word, 's-', color='#d6604d', label='Word-Level')
-axs[0].set_xlabel('Layer')
-axs[0].set_ylabel('CKA')
-axs[0].set_title('CKA')
-axs[0].set_xticks(range(12))
-axs[0].set_xticklabels([f'L{i}' for i in range(12)])
-axs[0].legend()
-axs[0].grid(True, alpha=0.3)
+n_panels = 1 + (1 if has_twonn else 0) + (1 if has_mknn else 0)
+fig, axs = plt.subplots(1, n_panels, figsize=(6 * n_panels, 5))
+if n_panels == 1:
+    axs = [axs]
+fig.suptitle('All Metrics at 25% Perturbation (Per Layer)', fontsize=14, fontweight='bold')
 
-# TwoNN
-twonn_bpe = [df_bpe[f'intrinsic_dim_change_layer_{i}'].mean() for i in range(12)]
-twonn_word = [df_word[f'intrinsic_dim_change_layer_{i}'].mean() for i in range(12)]
-axs[1].plot(range(12), twonn_bpe, 'o-', color='#2166ac', label='BPE Token')
-axs[1].plot(range(12), twonn_word, 's-', color='#d6604d', label='Word-Level')
-axs[1].set_xlabel('Layer')
-axs[1].set_ylabel('TwoNN Dim Change')
-axs[1].set_title('TwoNN Intrinsic Dim Change')
-axs[1].set_xticks(range(12))
-axs[1].set_xticklabels([f'L{i}' for i in range(12)])
-axs[1].axhline(0, color='gray', linestyle='--', alpha=0.5)
-axs[1].legend()
-axs[1].grid(True, alpha=0.3)
+x = np.arange(12)
+panel_idx = 0
 
-# MKNN
-mknn_bpe = [df_bpe[f'intrinsic_dim_mknn_change_layer_{i}'].mean() for i in range(12)]
-mknn_word = [df_word[f'intrinsic_dim_mknn_change_layer_{i}'].mean() for i in range(12)]
-axs[2].plot(range(12), mknn_bpe, 'o-', color='#2166ac', label='BPE Token')
-axs[2].plot(range(12), mknn_word, 's-', color='#d6604d', label='Word-Level')
-axs[2].set_xlabel('Layer')
-axs[2].set_ylabel('MKNN Dim Change')
-axs[2].set_title('MKNN Intrinsic Dim Change')
-axs[2].set_xticks(range(12))
-axs[2].set_xticklabels([f'L{i}' for i in range(12)])
-axs[2].axhline(0, color='gray', linestyle='--', alpha=0.5)
-axs[2].legend()
-axs[2].grid(True, alpha=0.3)
+# Panel 1: CKA
+cka_bpe = [df_bpe[f'{cka_prefix}layer_{i}'].mean() for i in range(12)]
+cka_word = [df_word[f'{cka_prefix}layer_{i}'].mean() for i in range(12)]
+axs[panel_idx].plot(x, cka_bpe, 'o-', color='#2166ac', label='BPE Token', linewidth=2, markersize=6)
+axs[panel_idx].plot(x, cka_word, 's-', color='#d6604d', label='Word-Level', linewidth=2, markersize=6)
+axs[panel_idx].set_xlabel('Layer')
+axs[panel_idx].set_ylabel('CKA (1 = identical)')
+axs[panel_idx].set_title('CKA')
+axs[panel_idx].set_xticks(x)
+axs[panel_idx].set_xticklabels([f'L{i}' for i in range(12)])
+axs[panel_idx].legend()
+axs[panel_idx].grid(True, alpha=0.3)
+panel_idx += 1
+
+# Panel 2: TwoNN
+if has_twonn:
+    twonn_bpe = [df_bpe[f'intrinsic_dim_change_layer_{i}'].mean() for i in range(12)]
+    twonn_word = [df_word[f'intrinsic_dim_change_layer_{i}'].mean() for i in range(12)]
+    axs[panel_idx].bar(x - 0.175, twonn_bpe, 0.35, label='BPE Token', color='#2166ac', alpha=0.85)
+    axs[panel_idx].bar(x + 0.175, twonn_word, 0.35, label='Word-Level', color='#d6604d', alpha=0.85)
+    axs[panel_idx].axhline(0, color='black', linewidth=0.5)
+    axs[panel_idx].set_xlabel('Layer')
+    axs[panel_idx].set_ylabel('TwoNN Dim Change')
+    axs[panel_idx].set_title('TwoNN Intrinsic Dim Change')
+    axs[panel_idx].set_xticks(x)
+    axs[panel_idx].set_xticklabels([f'L{i}' for i in range(12)])
+    axs[panel_idx].legend()
+    axs[panel_idx].grid(True, alpha=0.2, axis='y')
+    panel_idx += 1
+
+# Panel 3: MKNN
+if has_mknn:
+    mknn_bpe = [df_bpe[f'intrinsic_dim_mknn_change_layer_{i}'].mean() for i in range(12)]
+    mknn_word = [df_word[f'intrinsic_dim_mknn_change_layer_{i}'].mean() for i in range(12)]
+    axs[panel_idx].bar(x - 0.175, mknn_bpe, 0.35, label='BPE Token', color='#2166ac', alpha=0.85)
+    axs[panel_idx].bar(x + 0.175, mknn_word, 0.35, label='Word-Level', color='#d6604d', alpha=0.85)
+    axs[panel_idx].axhline(0, color='black', linewidth=0.5)
+    axs[panel_idx].set_xlabel('Layer')
+    axs[panel_idx].set_ylabel('MKNN Dim Change')
+    axs[panel_idx].set_title('MKNN Intrinsic Dim Change')
+    axs[panel_idx].set_xticks(x)
+    axs[panel_idx].set_xticklabels([f'L{i}' for i in range(12)])
+    axs[panel_idx].legend()
+    axs[panel_idx].grid(True, alpha=0.2, axis='y')
+    panel_idx += 1
 
 plt.tight_layout()
 plt.savefig('results/all_metrics_25pct.png', bbox_inches='tight', dpi=150)
