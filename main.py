@@ -39,13 +39,15 @@ def run(args):
 
     texts = list(ds['test']['text'])
     texts = [x for x in texts if len(x.split()) > SEQ_LEN]
+    if args.n_samples > 0 and not args.debug:
+        texts = random.Random(1).sample(texts, args.n_samples)
     if args.debug:
         texts = [
             'Lorem ipsum dolor sit amet',
             'Hello world! Hello universe?'
         ]
     
-    BATCH_SIZE = 128 if torch.cuda.is_available() else 4
+    BATCH_SIZE = args.batch_size if args.batch_size > 0 else (128 if torch.cuda.is_available() else 4)
     
     ptb_type = args.ptb_type
 
@@ -104,6 +106,8 @@ if __name__ == "__main__":
     parser.add_argument("--ptb-type", help="Perturbation type: ['char', 'token', 'shuffle']", type=str, default='char')
     parser.add_argument("--ptb-pct", help="Percent of input text perturbed", type=int, default=-1)
     parser.add_argument("--seed", help="Random seed", type=int, default=1)
+    parser.add_argument("--n-samples", help="Number of sequences to sample (-1 = use all)", type=int, default=-1)
+    parser.add_argument("--batch-size", help="Batch size (<=0 = auto: 128 GPU / 4 CPU)", type=int, default=0)
     parser.add_argument("--debug", action='store_true')
 
     args = parser.parse_args()

@@ -28,7 +28,7 @@ def test_perturbations():
         "Hello world! This is a test of the perturbation system."
     ]
     
-    for ptb_type in ['char', 'token', 'word', 'shuffle', 'typo']:
+    for ptb_type in ['char', 'token', 'word', 'shuffle', 'typo', 'synonym']:
         try:
             result = perturb(texts, 25, rng, ptb_type, tokenizer)
             assert len(result) == len(texts), f"{ptb_type}: wrong output count"
@@ -146,7 +146,7 @@ def test_memory_usage():
     
     if torch.cuda.is_available():
         print(f"  GPU: {torch.cuda.get_device_name(0)}")
-        print(f"  Memory: {torch.cuda.get_device_properties(0).total_mem / 1e9:.1f} GB")
+        print(f"  Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
         print(f"  Allocated: {torch.cuda.memory_allocated() / 1e6:.1f} MB")
         print(f"  Cached: {torch.cuda.memory_reserved() / 1e6:.1f} MB")
     else:

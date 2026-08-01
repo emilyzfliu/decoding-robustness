@@ -10,14 +10,22 @@ from datasets import load_dataset
 import random
 from transformers import AutoTokenizer
 import os
+import argparse
 from parse import parse
 from matplotlib.lines import Line2D
 
 
 from ablations import entropy_slope_by_head
 
+parser = argparse.ArgumentParser(description="Generate figures from base experiment results.")
+parser.add_argument('--model', default='gpt2', help="Model key in config.MODEL_INFO (default: gpt2)")
+parser.add_argument('--out-dir', default='figures', help="Where to write figure/CSV outputs")
+args = parser.parse_args()
+MODEL = args.model
+OUT_DIR = args.out_dir
+
 # Write figure/CSV outputs to a local figures/ dir (inputs are read from results/).
-os.makedirs('figures', exist_ok=True)
+os.makedirs(OUT_DIR, exist_ok=True)
 
 ptb_types = ['token', 'char', 'shuffle']
 ptb_names = ['Token Substitution', 'Char substitution', 'Token Shuffling']
@@ -25,7 +33,7 @@ percentages = [[x*5 for x in range(1, 11)] if x != 'shuffle' else [x*5 for x in 
 
 
 # Set up a baseline
-baseline = pd.read_csv('results/char/0/evals.csv')
+baseline = pd.read_csv(f'results/{MODEL}/char/0/evals.csv')
 
 ##### Figure 1 #####
 print('Figure 1')
@@ -33,16 +41,15 @@ print('Figure 1')
 fig, axs = plt.subplots(1, 3, figsize=(18, 5))
 fig.suptitle('Behavioral Metrics', fontsize=14)
 
-def get_log_ppl_stats(df, col="perplexity"):
-    ppl = df[col].to_numpy()
-    ppl = ppl[np.isfinite(ppl) & (ppl > 0)]
-
-    log_ppl = np.log(ppl)
+def get_log_ppl_stats(df, col="nll"):
+    # `nll` is already in log-space (per-token cross-entropy), so no log() here.
+    nll = df[col].to_numpy()
+    nll = nll[np.isfinite(nll)]
 
     return {
-        "center": np.median(log_ppl),      # robust sequence-level NLL
-        "low": np.percentile(log_ppl, 25),
-        "high": np.percentile(log_ppl, 75),
+        "center": np.median(nll),      # robust sequence-level NLL
+        "low": np.percentile(nll, 25),
+        "high": np.percentile(nll, 75),
     }
 
 for i, PTB_TYPE in enumerate(ptb_types):
@@ -54,7 +61,7 @@ for i, PTB_TYPE in enumerate(ptb_types):
 
     for j in range(1, 11):
         pct = 5 * j
-        seq = pd.read_csv(f"results/{PTB_TYPE}/{pct}/evals.csv")
+        seq = pd.read_csv(f"results/{MODEL}/{PTB_TYPE}/{pct}/evals.csv")
 
         stats = get_log_ppl_stats(seq)
         means.append(stats["center"])
@@ -77,7 +84,7 @@ for i, PTB_TYPE in enumerate(ptb_types):
     highs = [np.percentile(baseline['output_divergence'], 75)]
     for j in range(1, 11):
         pct = 5*j
-        seq = pd.read_csv(f'results/{PTB_TYPE}/{pct}/evals.csv')
+        seq = pd.read_csv(f'results/{MODEL}/{PTB_TYPE}/{pct}/evals.csv')
         means.append(np.median(seq['output_divergence']))
         lows.append(np.percentile(seq['output_divergence'], 25))
         highs.append(np.percentile(seq['output_divergence'], 75))
@@ -98,7 +105,7 @@ for i, PTB_TYPE in enumerate(ptb_types):
     highs = [np.percentile(baseline['logit_kl'], 75)]
     for j in range(1, 11):
         pct = 5*j
-        seq = pd.read_csv(f'results/{PTB_TYPE}/{pct}/evals.csv')
+        seq = pd.read_csv(f'results/{MODEL}/{PTB_TYPE}/{pct}/evals.csv')
         means.append(np.median(seq['logit_kl']))
         lows.append(np.percentile(seq['logit_kl'], 25))
         highs.append(np.percentile(seq['logit_kl'], 75))
@@ -111,7 +118,7 @@ axs[2].set_xlabel('Perturbation %')
 
 axs[2].legend()
 
-plt.savefig(f'figures/behavioral.png', bbox_inches='tight', dpi=150)
+plt.savefig(f'{OUT_DIR}/behavioral.png', bbox_inches='tight', dpi=150)
 
 ####################
 
@@ -177,7 +184,7 @@ for idx in range(3):
     highs = [np.percentile(baseline['output_divergence'], 75)]
     for j in range(1, 11):
         pct = 5*j
-        seq = pd.read_csv(f'results/{ptb}/{pct}/evals.csv')
+        seq = pd.read_csv(f'results/{MODEL}/{ptb}/{pct}/evals.csv')
         means.append(np.median(seq['output_divergence']))
         lows.append(np.percentile(seq['output_divergence'], 25))
         highs.append(np.percentile(seq['output_divergence'], 75))
@@ -190,7 +197,7 @@ for idx in range(3):
     axs[idx].set_xlabel('Perturbation %')
     axs[idx].legend()
 
-plt.savefig(f'figures/in_vs_out.png', bbox_inches='tight', dpi=150)
+plt.savefig(f'{OUT_DIR}/in_vs_out.png', bbox_inches='tight', dpi=150)
 
 #####################
 
@@ -206,7 +213,7 @@ for i, PTB_TYPE in enumerate(ptb_types):
     mean_matrix = []
 
     for pct in percentages[i]:
-        seq =  pd.read_csv(f'results/{PTB_TYPE}/{pct}/evals.csv')
+        seq =  pd.read_csv(f'results/{MODEL}/{PTB_TYPE}/{pct}/evals.csv')
         means = []
         for j in range(12):
             means.append(np.mean(seq[f'activation_cos_sim_layer_{j}']))
@@ -219,7 +226,7 @@ for i, PTB_TYPE in enumerate(ptb_types):
     axs[i].set_title(ptb_names[i])
     axs[i].set_xlabel('Layer')
     axs[i].set_ylabel('Percentage')
-plt.savefig(f'figures/mean_activation_similarity.png')
+plt.savefig(f'{OUT_DIR}/mean_activation_similarity.png')
 
 ####################
 
@@ -259,7 +266,7 @@ for i, PTB_TYPE in enumerate(ptb_types):
     ax.set_ylabel('Head')
 
 plt.tight_layout()
-plt.savefig(f'figures/entropy_slope_heatmap.png', bbox_inches='tight', dpi=150)
+plt.savefig(f'{OUT_DIR}/entropy_slope_heatmap.png', bbox_inches='tight', dpi=150)
 
 ####################
 
@@ -280,20 +287,24 @@ for ptb in ptb_types:
     gap_nll = []
     gap_kl = []
     gap_output = []
-    for candidate in os.listdir(f'results/ablated/{ptb}'):
+    ablated_dir = f'results/{MODEL}/ablated/{ptb}'
+    if not os.path.isdir(ablated_dir):
+        print(f'  [skip] no ablation data at {ablated_dir}')
+        continue
+    for candidate in os.listdir(ablated_dir):
         metadata = parse_info(candidate)
         pct = metadata['ptb_pct']
-        ablated = pd.read_csv(f'results/ablated/{ptb}/{candidate}/evals.csv')
-        orig =  pd.read_csv(f'results/{ptb}/{pct}/evals.csv')
-        orig_baseline = pd.read_csv('results/char/0/evals.csv')
+        ablated = pd.read_csv(f'{ablated_dir}/{candidate}/evals.csv')
+        orig =  pd.read_csv(f'results/{MODEL}/{ptb}/{pct}/evals.csv')
+        orig_baseline = pd.read_csv(f'results/{MODEL}/char/0/evals.csv')
 
-        # NLL
-        ablated_ptb_nll = np.mean(np.log(ablated['perplexity']))
-        ablated_base_nll = np.mean(np.log(ablated['perplexity_baseline']))
+        # NLL (columns are already log-space: nll, nll_base)
+        ablated_ptb_nll = np.mean(ablated['nll'])
+        ablated_base_nll = np.mean(ablated['nll_base'])
         ablated_gap = ablated_ptb_nll - ablated_base_nll
 
-        orig_ptb_nll = np.mean(np.log(orig['perplexity']))
-        orig_base_nll = np.mean(np.log(orig_baseline['perplexity']))
+        orig_ptb_nll = np.mean(orig['nll'])
+        orig_base_nll = np.mean(orig_baseline['nll'])
         orig_gap = orig_ptb_nll - orig_base_nll
 
         gap_nll.append((orig_gap - ablated_gap) / orig_gap * 100)
@@ -326,9 +337,10 @@ for ptb in ptb_types:
         }
     )
 
-ablation_dfs['token'].to_csv('figures/token_ablation_ranks.csv')
-ablation_dfs['char'].to_csv('figures/char_ablation_ranks.csv')
-ablation_dfs['shuffle'].to_csv('figures/shuffle_ablation_ranks.csv')
+if ablation_dfs:
+    ablation_dfs['token'].to_csv(f'{OUT_DIR}/token_ablation_ranks.csv')
+    ablation_dfs['char'].to_csv(f'{OUT_DIR}/char_ablation_ranks.csv')
+    ablation_dfs['shuffle'].to_csv(f'{OUT_DIR}/shuffle_ablation_ranks.csv')
 
 CLASS_COLORS = {'propagator': '#2166ac', 'compensator': '#d6604d', 'neutral': '#888888'}
 
@@ -343,52 +355,58 @@ def classify(output_gap, threshold):
 
 lbl = 'output'
 
-all_gaps = [v for ptb in ptb_types for v in ablation_dfs[ptb][lbl]]
-ymin, ymax = min(all_gaps) - 0.05, max(all_gaps) + 0.05
+def plot_ablation_figure(ptb_types, ablation_dfs, lbl):
+    all_gaps = [v for ptb in ptb_types for v in ablation_dfs[ptb][lbl]]
+    ymin, ymax = min(all_gaps) - 0.05, max(all_gaps) + 0.05
 
-fig, axs = plt.subplots(1, 3, figsize=(14, 5), sharey=True)
-fig.suptitle('Ablation Effects', fontsize=14)
+    fig, axs = plt.subplots(1, 3, figsize=(14, 5), sharey=True)
+    fig.suptitle('Ablation Effects', fontsize=14)
 
-for idx, ptb in enumerate(ptb_types):
-    df = ablation_dfs[ptb].copy()
-    threshold = 0.15
+    for idx, ptb in enumerate(ptb_types):
+        df = ablation_dfs[ptb].copy()
+        threshold = 0.15
 
-    df['true_class'] = df['classifications']
-    df = df.sort_values(lbl).reset_index(drop=True)
+        df['true_class'] = df['classifications']
+        df = df.sort_values(lbl).reset_index(drop=True)
 
-    heads = [(df.iloc[i]['layers'], df.iloc[i]['heads']) for i in range(len(df))]
-    gap_reduction = list(df[lbl])
-    colors = [CLASS_COLORS[classify(g, threshold)] for g in gap_reduction]
-    markers = [ENTROPY_MARKERS.get(df.iloc[i]['true_class'], 'o') for i in range(len(df))]
+        heads = [(df.iloc[i]['layers'], df.iloc[i]['heads']) for i in range(len(df))]
+        gap_reduction = list(df[lbl])
+        colors = [CLASS_COLORS[classify(g, threshold)] for g in gap_reduction]
+        markers = [ENTROPY_MARKERS.get(df.iloc[i]['true_class'], 'o') for i in range(len(df))]
 
-    ax = axs[idx]
-    xs = range(len(df))
+        ax = axs[idx]
+        xs = range(len(df))
 
-    ax.axhline(0, color='black', linewidth=0.6, zorder=1)
-    ax.axhline( threshold, color=CLASS_COLORS['propagator'],  linewidth=0.8, linestyle='--', alpha=0.7)
-    ax.axhline(-threshold, color=CLASS_COLORS['compensator'], linewidth=0.8, linestyle='--', alpha=0.7)
+        ax.axhline(0, color='black', linewidth=0.6, zorder=1)
+        ax.axhline(threshold, color=CLASS_COLORS['propagator'], linewidth=0.8, linestyle='--', alpha=0.7)
+        ax.axhline(-threshold, color=CLASS_COLORS['compensator'], linewidth=0.8, linestyle='--', alpha=0.7)
 
-    for xi, (yi, color, marker) in enumerate(zip(gap_reduction, colors, markers)):
-        ax.scatter(xi, yi, c=color, marker=marker, s=60, zorder=3)
+        for xi, (yi, color, marker) in enumerate(zip(gap_reduction, colors, markers)):
+            ax.scatter(xi, yi, c=color, marker=marker, s=60, zorder=3)
 
-    ax.set_xticks(xs)
-    ax.set_xticklabels([f'L{x}H{y}' for x, y in heads], rotation=45, ha='right', fontsize=8)
-    ax.set_ylim(ymin, ymax)
-    ax.set_title(ptb_names[idx], fontsize=11)
-    if idx == 0:
-        ax.set_ylabel(f'{lbl.capitalize()} gap reduction (%)', fontsize=9)
+        ax.set_xticks(xs)
+        ax.set_xticklabels([f'L{x}H{y}' for x, y in heads], rotation=45, ha='right', fontsize=8)
+        ax.set_ylim(ymin, ymax)
+        ax.set_title(ptb_names[idx], fontsize=11)
+        if idx == 0:
+            ax.set_ylabel(f'{lbl.capitalize()} gap reduction (%)', fontsize=9)
 
-handles = [
-    Line2D([0], [0], marker='o', color='w', markerfacecolor=CLASS_COLORS['propagator'],  markersize=8, label='Propagator'),
-    Line2D([0], [0], marker='o', color='w', markerfacecolor=CLASS_COLORS['compensator'], markersize=8, label='Compensator'),
-    Line2D([0], [0], marker='o', color='w', markerfacecolor=CLASS_COLORS['neutral'],     markersize=8, label='Neutral'),
-    Line2D([0], [0], marker='o', color='w', markerfacecolor='#555555', markersize=8, label='Diffuse head'),
-    Line2D([0], [0], marker='D', color='w', markerfacecolor='#555555', markersize=8, label='Sink head'),
-]
-fig.legend(handles=handles, loc='lower center', ncol=5, fontsize=9, bbox_to_anchor=(0.5, -0.08))
-fig.tight_layout()
+    handles = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor=CLASS_COLORS['propagator'],  markersize=8, label='Propagator'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor=CLASS_COLORS['compensator'], markersize=8, label='Compensator'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor=CLASS_COLORS['neutral'],     markersize=8, label='Neutral'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='#555555', markersize=8, label='Diffuse head'),
+        Line2D([0], [0], marker='D', color='w', markerfacecolor='#555555', markersize=8, label='Sink head'),
+    ]
+    fig.legend(handles=handles, loc='lower center', ncol=5, fontsize=9, bbox_to_anchor=(0.5, -0.08))
+    fig.tight_layout()
 
-plt.savefig(f'figures/ablations.png', bbox_inches='tight', dpi=150)
+    plt.savefig(f'{OUT_DIR}/ablations.png', bbox_inches='tight', dpi=150)
+
+if ablation_dfs:
+    plot_ablation_figure(ptb_types, ablation_dfs, lbl)
+else:
+    print('[skip] Figure 5 (ablations): no ablation results found')
 
 ####################
 
@@ -400,17 +418,15 @@ pct_pick = {'token': 25, 'char': 25, 'shuffle': 50}
 layers = list(range(13))
 
 fig, axs = plt.subplots(1, 3, figsize=(20, 5))
-fig.suptitle('Per-Layer Representation Similarity: raw cosine (confounded) vs stripped metrics', fontsize=14)
+fig.suptitle('Per-Layer Representation Similarity: raw cosine (confounded) vs stripped CKA', fontsize=14)
 
 for i, PTB_TYPE in enumerate(ptb_types):
     pct = pct_pick[PTB_TYPE]
-    seq = pd.read_csv(f'results/{PTB_TYPE}/{pct}/evals.csv')
+    seq = pd.read_csv(f'results/{MODEL}/{PTB_TYPE}/{pct}/evals.csv')
     raw_cos   = [np.mean(seq[f'activation_cos_sim_layer_{L}'])      for L in layers]
-    strip_cos = [np.mean(seq[f'activation_cos_stripped_layer_{L}']) for L in layers]
     strip_cka = [np.mean(seq[f'activation_cka_layer_{L}'])          for L in layers]
 
     axs[i].plot(layers, raw_cos,   'o--', color='#999999', label='raw cosine (confounded)')
-    axs[i].plot(layers, strip_cos, 's-',  color='#d6604d', label='stripped cosine')
     axs[i].plot(layers, strip_cka, '^-',  color='#2166ac', label='stripped CKA')
     axs[i].axhline(1.0, color='black', lw=0.4, alpha=0.5)
     axs[i].set_title(f'{ptb_names[i]} @ {pct}%')
@@ -420,7 +436,7 @@ for i, PTB_TYPE in enumerate(ptb_types):
         axs[i].set_ylabel('Similarity to clean')
     axs[i].legend(fontsize=9)
 
-plt.savefig(f'figures/representation_similarity_corrected.png', bbox_inches='tight', dpi=150)
+plt.savefig(f'{OUT_DIR}/representation_similarity_corrected.png', bbox_inches='tight', dpi=150)
 
 ####################
 
@@ -432,7 +448,7 @@ fig.suptitle('Per-Layer Stripped CKA (massive-activation dims removed)', fontsiz
 for i, PTB_TYPE in enumerate(ptb_types):
     mean_matrix = []
     for pct in percentages[i]:
-        seq = pd.read_csv(f'results/{PTB_TYPE}/{pct}/evals.csv')
+        seq = pd.read_csv(f'results/{MODEL}/{PTB_TYPE}/{pct}/evals.csv')
         mean_matrix.append([np.mean(seq[f'activation_cka_layer_{L}']) for L in range(13)])
     mean_matrix = np.array(mean_matrix)
 
@@ -442,7 +458,7 @@ for i, PTB_TYPE in enumerate(ptb_types):
     axs[i].set_xlabel('Layer')
     axs[i].set_ylabel('Perturbation %')
 
-plt.savefig(f'figures/stripped_cka_heatmap.png', bbox_inches='tight', dpi=150)
+plt.savefig(f'{OUT_DIR}/stripped_cka_heatmap.png', bbox_inches='tight', dpi=150)
 
 ####################
 

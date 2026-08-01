@@ -2,7 +2,15 @@
 File for all perturbation implementations.
 Outside code should only ever call function `perturb`
 """
+import re
 import string
+
+try:
+    import nltk
+    from nltk.corpus import wordnet as wn
+    _HAS_NLTK = True
+except ImportError:
+    _HAS_NLTK = False
 
 # QWERTY keyboard adjacency map for realistic typo simulation
 QWERTY_ADJACENT = {
@@ -43,8 +51,10 @@ def perturb(texts, perturb_pct, rng, ptb_type, tokenizer):
         return token_shuffle(texts, perturb_pct, rng, tokenizer=tokenizer)
     elif ptb_type == 'typo':
         return typo_perturbation(texts, perturb_pct, rng)
+    elif ptb_type == 'synonym':
+        return synonym_substitution(texts, perturb_pct, rng, tokenizer)
     else:
-        raise TypeError("ptb_type must be one of ['char', 'token', 'word', 'shuffle', 'typo']")
+        raise TypeError("ptb_type must be one of ['char', 'token', 'word', 'shuffle', 'typo', 'synonym']")
     
 
 def character_substitution(texts, perturb_pct, rng):
@@ -159,6 +169,85 @@ def word_substitution(texts, perturb_pct, rng, tokenizer, max_length=128):
         
         ret.append(' '.join(words_list))
     
+    return ret
+
+
+# Cache of word -> WordNet synonyms (built lazily, shared across calls)
+_SYNONYM_CACHE = {}
+_SYNONYM_INIT = False
+
+
+def _ensure_wordnet():
+    """Download the WordNet corpus once if nltk is available."""
+    global _SYNONYM_INIT
+    if _SYNONYM_INIT:
+        return
+    if _HAS_NLTK:
+        try:
+            nltk.data.find('corpora/wordnet')
+        except LookupError:
+            nltk.download('wordnet', quiet=True)
+    _SYNONYM_INIT = True
+
+
+def _get_synonyms(word):
+    """Return a sorted list of WordNet synonyms for a lowercase word (may be empty)."""
+    if word in _SYNONYM_CACHE:
+        return _SYNONYM_CACHE[word]
+    syns = set()
+    if _HAS_NLTK:
+        for ss in wn.synsets(word):
+            for lemma in ss.lemmas():
+                name = lemma.name().replace('_', ' ')
+                # Keep single-token replacements only so token counts are preserved.
+                if ' ' not in name and name.lower() != word:
+                    syns.add(name)
+    result = sorted(syns)
+    _SYNONYM_CACHE[word] = result
+    return result
+
+
+def synonym_substitution(texts, perturb_pct, rng, tokenizer=None, max_length=128):
+    """
+    Replace words with WordNet synonyms (same synset members) at random positions.
+    A more realistic word-level baseline than uniform random word replacement.
+    Falls back to leaving a word untouched when no synonym exists.
+    """
+    if not _HAS_NLTK:
+        raise ImportError(
+            "synonym_substitution requires nltk + WordNet: "
+            "pip install nltk && python -c \"import nltk; nltk.download('wordnet')\""
+        )
+    _ensure_wordnet()
+
+    word_pattern = re.compile(r'^(\W*)(\w+)(\W*)$')
+
+    def replace_with_synonym(word):
+        m = word_pattern.match(word)
+        if not m:
+            return word
+        pre, core, post = m.groups()
+        syns = _get_synonyms(core.lower())
+        if not syns:
+            return word
+        repl = rng.choice(syns)
+        if core.isupper():
+            repl = repl.upper()
+        elif core[:1].isupper():
+            repl = repl[:1].upper() + repl[1:]
+        return pre + repl + post
+
+    ret = []
+    for text in texts:
+        words = text.split()
+        n_words = len(words)
+        n_to_replace = max(1, int(perturb_pct * n_words / 100))
+        positions = rng.sample(range(n_words), min(n_to_replace, n_words))
+
+        words_list = list(words)
+        for pos in positions:
+            words_list[pos] = replace_with_synonym(words_list[pos])
+        ret.append(' '.join(words_list))
     return ret
 
 

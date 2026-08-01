@@ -26,18 +26,18 @@ def ablate_head(model, layer_idx, head_idx):
     return handle
 
 
-def entropy_slope_by_head(ptb_type, percentages):
+def entropy_slope_by_head(ptb_type, percentages, model='gpt2'):
     # shape: (n_pcts, n_layers, n_heads)
     entropy_by_pct = []
     
     for pct in percentages:
-        seq = pd.read_csv(f'results/{ptb_type}/{pct}/evals.csv')
+        seq = pd.read_csv(f'results/{model}/{ptb_type}/{pct}/evals.csv')
         
         layer_head_means = []
         for i in range(12):
             head_means = []
             for h in range(12):
-                col = f'attn_layer{i}_head_{h}_entropy'
+                col = f'attn_layer{i}_head_{h}_entropy_norm'
                 head_means.append(np.mean(seq[col]))
             layer_head_means.append(head_means)
         entropy_by_pct.append(layer_head_means)
@@ -58,7 +58,7 @@ def id_ablation_heads_entropy(args):
 
     scores = {}
 
-    slopes = entropy_slope_by_head(ptb_type, ptb_pct)
+    slopes = entropy_slope_by_head(ptb_type, ptb_pct, model=args.model)
 
     for i in range(12):
         for h in range(12):
@@ -113,10 +113,10 @@ def run_ablation(args, ablate_type, ptb_pct, l, h):
 
     from tqdm import tqdm
 
-    os.makedirs(f'results/ablated/{ptb_type}/l={l}_h={h}_pct={ptb_pct}_{ablate_type}', exist_ok=True)
+    os.makedirs(f'results/{args.model}/ablated/{ptb_type}/l={l}_h={h}_pct={ptb_pct}_{ablate_type}', exist_ok=True)
 
     try:
-        seen = set(pd.read_csv(f'results/ablated/{ptb_type}/l={l}_h={h}_pct={ptb_pct}_{ablate_type}/evals.csv')['sample'])
+        seen = set(pd.read_csv(f'results/{args.model}/ablated/{ptb_type}/l={l}_h={h}_pct={ptb_pct}_{ablate_type}/evals.csv')['sample'])
     except:
         seen = set()
 
@@ -137,7 +137,7 @@ def run_ablation(args, ablate_type, ptb_pct, l, h):
 
         res = res[~res['sample'].isin(seen)]
         if not args.debug:
-            res.to_csv(f'results/ablated/{ptb_type}/l={l}_h={h}_pct={ptb_pct}_{ablate_type}/evals.csv', 
+            res.to_csv(f'results/{args.model}/ablated/{ptb_type}/l={l}_h={h}_pct={ptb_pct}_{ablate_type}/evals.csv', 
                                     mode='a', header=(i==0 and len(seen) == 0), index=False)
         else:
             res.to_csv('results/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
@@ -153,6 +153,7 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Params: perturb_type, perturb_pct")
 
+    parser.add_argument("--model", help="Model name (must be in config.MODEL_INFO)", type=str, default='gpt2')
     parser.add_argument("--ptb-type", help="Perturbation type: ['char', 'token', 'shuffle']", type=str, default='char')
     parser.add_argument("--seed", help="Random seed", type=int, default=1)
     parser.add_argument("--debug", action='store_true')
