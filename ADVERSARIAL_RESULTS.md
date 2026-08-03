@@ -1,8 +1,10 @@
 # Adversarial / Injection Perturbations — Results
 
 GPT-2 Small (117M), WikiText-2 (`wikitext-2-raw-v1`, test split, 748 passages passing the
->128-word filter), `max_length=128`, seed=1. See `ADVERSARIAL_METHODOLOGY.md` for full
-caveats.
+>128-word filter), seed=1. Two sequence-length configurations are reported: the original
+`max_length=128` (full 748-passage run) and a `max_length=1024` config that lets nearly
+every passage run its full natural length with no truncation (currently a 50-sample
+pilot; full 748-passage run pending). See `ADVERSARIAL_METHODOLOGY.md` for full caveats.
 
 ## 1. Context Insertion
 
@@ -38,6 +40,28 @@ vulnerable to targeted corruption versus generic noise.
   Optimizes purely for loss, not fluency, hence the incoherent output:
   > "The quick brown fox jumps over the lazy **the Honolulublance emb** dog in the year
   > 1995 near Paris..."
+
+### 1a. Context Insertion — max_length=1024 (untruncated context, n=50 pilot)
+
+Same conditions, but with the sequence-length cap raised from 128 to GPT-2's real
+1024-token limit. Since the >128-word filter guarantees ≥128 tokens of content but not
+1024, most passages now run their full natural length (mean ~226 tokens, max 542 —
+essentially none get truncated) rather than being cut off at 128. **This is a 50-sample
+pilot, not yet the full 748-passage run** — treat magnitudes as preliminary.
+
+| Condition | PPL | Δ PPL vs. clean | Next-token acc. |
+|---|---|---|---|
+| Clean | 43.26 | — | 34.0% |
+| Misleading factual claim | 44.88 | +1.62 | 33.8% |
+| Topic-shift (irrelevant sentence) | 51.78 | +8.52 | 32.9% |
+| Adversarial (gradient-guided) | 99.96 | +56.70 | 31.3% |
+
+Same qualitative ordering as the 128-token result (clean < misleading_claim < topic_shift
+≪ adversarial), and next-token accuracy is slightly *higher* across the board than the
+128-token version — consistent with the model benefiting from fuller, untruncated
+context. Note the Δ PPL magnitudes are smaller here than at 128 tokens (e.g. adversarial
++56.7 vs. +193.5) — worth confirming this pattern holds once the full 748-passage run
+completes, since it's currently only 50 samples.
 
 ## 2. Question-Level Perturbations
 
