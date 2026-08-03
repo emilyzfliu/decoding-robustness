@@ -75,7 +75,7 @@ def load_model_and_data(args):
 
 def run_context_insertion(args, model, tokenizer, device, texts):
     rng = random.Random(args.seed)
-    results_dir = f'results/{args.model}/adversarial/context_insertion'
+    results_dir = f'results/{args.model}/adversarial/context_insertion_{args.max_length}tok'
     os.makedirs(results_dir, exist_ok=True)
 
     summary_rows = []
@@ -87,6 +87,7 @@ def run_context_insertion(args, model, tokenizer, device, texts):
 
         perturbed_texts = context_insertion(
             texts, condition, rng, tokenizer, model=model, device=device, distractor_pool=texts,
+            max_length=args.max_length,
         )
 
         try:
@@ -98,8 +99,11 @@ def run_context_insertion(args, model, tokenizer, device, texts):
         for i, text in enumerate(perturbed_texts):
             if i in seen:
                 continue
+            # No padding: this loop is always batch-size-1, and padding to a fixed
+            # length combined with left-padding pushes real content to very high
+            # position indices, badly degrading GPT-2's predictions.
             inputs = tokenizer(text, return_tensors="pt", truncation=True,
-                                max_length=128, padding='max_length').to(device)
+                                max_length=args.max_length).to(device)
             with torch.no_grad():
                 outputs = model(**inputs)
             rows.append({
@@ -135,10 +139,16 @@ def run_context_insertion(args, model, tokenizer, device, texts):
 
 def _split_context_and_target(text):
     words = text.split()
-    if len(words) < 2:
+    # WikiText-2 raw text space-separates punctuation (e.g. "Hall ."), so the
+    # literal last token is frequently pure punctuation — walk back to the
+    # last token that actually contains a word character.
+    end = len(words)
+    while end > 0 and not re.search(r'\w', words[end - 1]):
+        end -= 1
+    if end < 2:
         return None, None
-    context = ' '.join(words[:-1])
-    target = re.sub(r'[^\w]', '', words[-1]).lower()
+    context = ' '.join(words[:end - 1])
+    target = re.sub(r'[^\w]', '', words[end - 1]).lower()
     if not target:
         return None, None
     return context, target
@@ -146,7 +156,7 @@ def _split_context_and_target(text):
 
 def run_question_level(args, model, tokenizer, device, texts):
     rng = random.Random(args.seed)
-    results_dir = f'results/{args.model}/adversarial/question_level'
+    results_dir = f'results/{args.model}/adversarial/question_level_{args.max_length}tok'
     os.makedirs(results_dir, exist_ok=True)
 
     pairs = [_split_context_and_target(t) for t in texts]
@@ -161,6 +171,7 @@ def run_question_level(args, model, tokenizer, device, texts):
 
         perturbed_contexts = question_perturbation(
             contexts, condition, rng, tokenizer, model=model, device=device,
+            max_length=args.max_length,
         )
 
         try:
@@ -172,7 +183,7 @@ def run_question_level(args, model, tokenizer, device, texts):
         for i, (ctx, target) in enumerate(zip(perturbed_contexts, targets)):
             if i in seen:
                 continue
-            inputs = tokenizer(ctx, return_tensors="pt", truncation=True, max_length=128).to(device)
+            inputs = tokenizer(ctx, return_tensors="pt", truncation=True, max_length=args.max_length).to(device)
             with torch.no_grad():
                 gen = model.generate(
                     **inputs, max_new_tokens=5, do_sample=False, pad_token_id=tokenizer.eos_token_id,
@@ -219,6 +230,10 @@ if __name__ == "__main__":
     parser.add_argument("--n-samples", type=int, default=50,
                          help="Subset size — adversarial/HotFlip conditions do per-sample gradient "
                               "optimization, so full-dataset runs aren't practical")
+    parser.add_argument("--max-length", type=int, default=1024,
+                         help="Tokenizer truncation length. Results are written under a "
+                              "{max_length}tok-suffixed directory so runs at different lengths "
+                              "never overwrite each other.")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--debug", action='store_true')
 

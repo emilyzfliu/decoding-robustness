@@ -19,7 +19,7 @@ from src.hotflip import hotflip_attack
 # ---------------------------------------------------------------------------
 
 def context_insertion(texts, condition, rng, tokenizer, model=None, device=None,
-                       distractor_pool=None, insertion_len=8, n_iters=20, max_length=128):
+                       distractor_pool=None, insertion_len=8, n_iters=20, max_length=1024):
     if condition == 'clean':
         return list(texts)
     elif condition == 'topic_shift':
@@ -154,7 +154,7 @@ def _adversarial_insertion(texts, rng, tokenizer, model, device, insertion_len, 
 # Question-level perturbations
 # ---------------------------------------------------------------------------
 
-def question_perturbation(texts, condition, rng, tokenizer, model=None, device=None, max_length=128):
+def question_perturbation(texts, condition, rng, tokenizer, model=None, device=None, max_length=1024):
     if condition == 'clean':
         return list(texts)
     elif condition == 'synonym':
