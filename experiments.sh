@@ -36,7 +36,7 @@ for ptb_type in 'char' 'token' 'shuffle' 'word' 'typo' 'synonym'; do
     # python main.py --ptb-type $ptb_type --ptb-pct 5 --output-tag 'clean_run'
     # python main.py --ptb-type $ptb_type --ptb-pct 30 --output-tag 'clean_run'
 
-    python ablations.py --ptb-type $ptb_type --ptb-pct 30 --output-tag 'ablated_run'
+    python ablations.py --ptb-type $ptb_type --output-tag 'ablated_run'
 done
 
 # Ablation experiments - Only run after base
