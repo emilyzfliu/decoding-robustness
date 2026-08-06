@@ -21,6 +21,8 @@ def run(args):
     rng = random.Random(args.seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    datetime_lbl = time.strftime("%Y%m%d-%H%M%S")
     # Set up models
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -65,10 +67,10 @@ def run(args):
         
         texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer)
 
-        os.makedirs(f'results/{args.model}/{ptb_type}/{ptb_pct}', exist_ok=True)
+        os.makedirs(f'results_{datetime_lbl}/{args.model}/{ptb_type}/{ptb_pct}', exist_ok=True)
 
         try:
-            seen = set(pd.read_csv(f'results/{args.model}/{ptb_type}/{ptb_pct}/evals.csv')['sample'])
+            seen = set(pd.read_csv(f'results_{datetime_lbl}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv')['sample'])
         except:
             seen = set()
 
@@ -90,10 +92,10 @@ def run(args):
 
             res = res[~res['sample'].isin(seen)]
             if not args.debug:
-                res.to_csv(f'results/{args.model}/{ptb_type}/{ptb_pct}/evals.csv', 
+                res.to_csv(f'results_{datetime_lbl}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv', 
                                         mode='a', header=(i==0 and len(seen) == 0), index=False)
             else:
-                res.to_csv(f'results/{args.model}/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
+                res.to_csv(f'results_{datetime_lbl}/{args.model}/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
             
             del outputs, outputs_perturbed
     print(f"Total time taken: {time() - start_time:.2f} seconds")
