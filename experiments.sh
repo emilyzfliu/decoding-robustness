@@ -25,10 +25,16 @@ export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
 
 # for model in 'qwen2.5_0.5b' 'qwen2.5_1.5b' 'qwen2.5_1.5b' 'qwen2.5_7b' 'qwen2.5_72b' ; do
-for model in 'qwen2.5_14b' 'qwen2.5_32b' 'qwen2.5_72b' ; do
-    for ptb_type in 'char' 'token' 'shuffle'; do
-        python main.py --model $model --ptb-type $ptb_type
-    done
+# for model in 'qwen2.5_14b' 'qwen2.5_32b' 'qwen2.5_72b' ; do
+#     for ptb_type in 'char' 'token' 'shuffle'; do
+#         python main.py --model $model --ptb-type $ptb_type
+#     done
+# done
+
+
+for ptb_type in 'word' 'typo' 'synonym'; do
+    python main.py --ptb-type $ptb_type --ptb-pct 5
+    python main.py --ptb-type $ptb_type --ptb-pct 30
 done
 
 # Ablation experiments - Only run after base
