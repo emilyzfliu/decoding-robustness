@@ -131,7 +131,7 @@ def run_ablation(args, ptb_pct, l, h):
         inputs_perturbed = tokenizer(batch_texts_perturbed, return_tensors="pt",
                                     truncation=True, max_length=128, padding='max_length').to(device)
         
-        eval_hidden = MODEL_INFO[args.model]['eval_hidden_states']
+        eval_hidden = False# MODEL_INFO[args.model]['eval_hidden_states']
         with torch.no_grad():
             outputs = model(**inputs, output_hidden_states= eval_hidden, output_attentions=eval_hidden)
             outputs_perturbed = model(**inputs_perturbed, output_hidden_states=eval_hidden, output_attentions=eval_hidden)
