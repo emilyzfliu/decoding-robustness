@@ -52,6 +52,33 @@ Primarily probes:
 * semantic degradation,
 * corrupted token identity.
 
+### Word Substitution
+
+Random whole-word replacement sampled from a word-level vocabulary derived from the tokenizer.
+
+Primarily probes:
+
+* lexical corruption at the word granularity,
+* tokenization-independent semantic degradation.
+
+### Typo Substitution
+
+Realistic character-level typos sampled from QWERTY keyboard adjacency (plus common punctuation typos).
+
+Primarily probes:
+
+* tokenizer disruption under plausible (non-uniform) noise,
+* how realistic typos differ from uniform character substitution.
+
+### Synonym Substitution
+
+Word replacement using WordNet synonyms (same synset members), preserving part-of-speech and case.
+
+Primarily probes:
+
+* semantic-preserving lexical corruption,
+* whether meaning-preserving substitutions are "easier" than random word replacement.
+
 ### Token Shuffling
 
 Random permutation within a contiguous local token window.
@@ -73,6 +100,9 @@ Primarily probes:
 ### Representation Metrics
 
 * Layer-wise activation cosine similarity
+* Linear CKA (stripped: top-variance dims removed)
+* TwoNN intrinsic dimension (manifold expansion/collapse)
+* MKNN intrinsic dimension (maximum-likelihood estimate)
 * Attention entropy dynamics
 
 ### Causal Analysis
@@ -92,12 +122,22 @@ Primarily probes:
 ## Repository
 
 ```text
-src/evals.py     # All metrics
-src/perturbs.py  # All perturbation implementations
-main.py          # Base experiment eval loop
-ablations.py     # Eval loop with single-head ablations
-figures.py       # Generate all writeup figures
+src/evals.py                        # All metrics (incl. CKA, TwoNN, MKNN)
+src/perturbs.py                     # All perturbation implementations
+main.py                             # Base experiment eval loop
+ablations.py                        # Eval loop with single-head ablations
+figures.py                          # Generate all writeup figures
+compare_bpe_vs_word.py              # BPE vs word-level substitution experiment
+plot_comparison.py                  # Figures for the BPE vs word comparison
+compare_perturbation_types.py       # Cross-type CKA comparison across 6 ptbs
+validate_intrinsic_dim.py           # Convergence/bootstrap validation of TwoNN/MKNN
+test_quick.py                       # Smoke-test suite for perturbations & metrics
 ```
+
+Results live under `results/{model}/{ptb_type}/{pct}/evals.csv` (the layout written
+by `main.py`); `--model`, `--n-samples`, and `--batch-size` control which model,
+how many sequences, and the per-step batch size. The BPE-vs-word comparison uses
+its own self-contained layout under `results/compare_bpe_word/`.
 
 ## Future Directions
 

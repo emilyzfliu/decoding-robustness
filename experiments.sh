@@ -5,9 +5,17 @@
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
 # Base experiments
-# python main.py --model 'gpt2' --ptb-type 'char'
-# python main.py --model 'gpt2' --ptb-type 'token'
-# python main.py --model 'gpt2' --ptb-type 'shuffle'
+# python main.py --model 'gpt2' --ptb-type 'char'   --n-samples 100 --batch-size 8
+# python main.py --model 'gpt2' --ptb-type 'token'  --n-samples 100 --batch-size 8
+# python main.py --model 'gpt2' --ptb-type 'shuffle' --n-samples 100 --batch-size 8
+# python main.py --model 'gpt2' --ptb-type 'typo'   --n-samples 100 --batch-size 8
+# python main.py --model 'gpt2' --ptb-type 'word'   --n-samples 100 --batch-size 8
+# python main.py --model 'gpt2' --ptb-type 'synonym' --n-samples 100 --batch-size 8
+
+# Analysis
+# python compare_perturbation_types.py --model gpt2 --pct 25
+# python validate_intrinsic_dim.py --model gpt2 --n-seq 8 --ptb-type char --ptb-pct 25
+# python figures.py --model gpt2
 
 # for model in 'gpt2' 'gpt2-medium' 'gpt2-large' 'gpt2-xl'; do
 #     for ptb_type in 'char' 'token' 'shuffle'; do

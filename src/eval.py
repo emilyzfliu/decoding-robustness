@@ -15,6 +15,7 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
     seq_cols = {
         'sample': [x for x in range(outputs_base.logits.shape[0])],
         'nll': nll(inputs_perturb, outputs_perturb),
+        'nll_base': nll(inputs_base, outputs_base),
         'output_divergence': output_divergence(outputs_base, outputs_perturb, tokenizer),
     }
     if not output_only:
@@ -181,20 +182,31 @@ def twoNN_intrinsic_dim(outputs_base, outputs_perturb, n_samples=500):
 
 
 def _estimate_intrinsic_dim(hidden_states, n_samples=500):
-    n_batch, n_seq, d_model = hidden_states.shape
-    points = hidden_states.reshape(-1, d_model).float().cpu().numpy()
+    """2NN intrinsic dimension from a (n_batch, n_seq, d_model) hidden-state tensor."""
+    points = hidden_states.reshape(-1, hidden_states.shape[-1]).float().cpu().numpy()
+    return estimate_intrinsic_dim_2nn(points, n_samples=n_samples, n_use=1000, seed=42)
+
+
+def estimate_intrinsic_dim_2nn(points, n_samples=500, n_use=1000, seed=42):
+    """Two-Nearest-Neighbours intrinsic dimension from an (N, D) point matrix.
+
+    Sub-samples down to `n_samples` points (if more are given), then estimates
+    the 2NN intrinsic dimension on at most `n_use` points. Returns None when
+    there are too few valid points to estimate reliably.
+    """
+    points = np.asarray(points, dtype=np.float32)
     n_total = points.shape[0]
     if n_total < 10:
         return None
     if n_total > n_samples:
-        rng = np.random.RandomState(42)
+        rng = np.random.RandomState(seed)
         idx = rng.choice(n_total, size=n_samples, replace=False)
         points = points[idx]
         n_total = n_samples
     try:
-        n_use = min(n_total, 1000)
+        n_use = min(n_total, n_use)
         if n_use < n_total:
-            rng = np.random.RandomState(42)
+            rng = np.random.RandomState(seed)
             idx = rng.choice(n_total, size=n_use, replace=False)
             points_sub = points[idx]
         else:
@@ -240,20 +252,26 @@ def mknn_intrinsic_dim(outputs_base, outputs_perturb, n_samples=500):
 
 
 def _estimate_mknn_dim(hidden_states, n_samples=500):
-    n_batch, n_seq, d_model = hidden_states.shape
-    points = hidden_states.reshape(-1, d_model).float().cpu().numpy()
+    """Maximum-Likelihood / MKNN intrinsic dimension from a hidden-state tensor."""
+    points = hidden_states.reshape(-1, hidden_states.shape[-1]).float().cpu().numpy()
+    return estimate_intrinsic_dim_mknn(points, n_samples=n_samples, n_use=1000, seed=42)
+
+
+def estimate_intrinsic_dim_mknn(points, n_samples=500, n_use=1000, seed=42):
+    """Maximum-likelihood intrinsic dimension (MKNN) from an (N, D) point matrix."""
+    points = np.asarray(points, dtype=np.float32)
     n_total = points.shape[0]
     if n_total < 10:
         return None
     if n_total > n_samples:
-        rng = np.random.RandomState(42)
+        rng = np.random.RandomState(seed)
         idx = rng.choice(n_total, size=n_samples, replace=False)
         points = points[idx]
         n_total = n_samples
     try:
-        n_use = min(n_total, 1000)
+        n_use = min(n_total, n_use)
         if n_use < n_total:
-            rng = np.random.RandomState(42)
+            rng = np.random.RandomState(seed)
             idx = rng.choice(n_total, size=n_use, replace=False)
             points_sub = points[idx]
         else:
