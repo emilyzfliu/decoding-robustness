@@ -7,12 +7,12 @@ import random
 import argparse
 import os
 import pandas as pd
-
-import numpy as np
-from scipy import stats
+from tqdm import tqdm
+from time import time
 
 from src.perturbs import perturb
 from src.eval import eval_loop
+from config import MODEL_INFO
     
 def ablate_head(model, layer_idx, head_idx):
     def hook(module, input, output):
@@ -71,17 +71,24 @@ def id_ablation_heads_entropy(args):
     return [x[0] for x in top_heads]
 
 def run_ablation(args, ablate_type, ptb_pct, l, h):
+    start_time = time()
     SEQ_LEN = 128 if not args.debug else 5
-    ptb_type = args.ptb_type
-    
+
+    model_name = MODEL_INFO[args.model]['model_name']
+        
     rng = random.Random(args.seed)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    tagline = args.output_tag if hasattr(args, 'output_tag') else ''
     # Set up models
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2")
+
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForCausalLM.from_pretrained(
-        "openai-community/gpt2",
-        attn_implementation='eager'
+      model_name, 
+      attn_implementation=MODEL_INFO[args.model]['attn_implementation']
     ).to(device)
+
     model.eval()
 
     handle = ablate_head(model, layer_idx=l, head_idx=h)
@@ -94,29 +101,24 @@ def run_ablation(args, ablate_type, ptb_pct, l, h):
 
     texts = list(ds['test']['text'])
     texts = [x for x in texts if len(x.split()) > SEQ_LEN]
-
-    rng_data = random.Random(1)
-
-    texts = rng_data.sample(texts, 100)
-
+    if args.n_samples > 0 and not args.debug:
+        texts = random.Random(1).sample(texts, args.n_samples)
     if args.debug:
         texts = [
             'Lorem ipsum dolor sit amet',
             'Hello world! Hello universe?'
         ]
     
+    BATCH_SIZE = args.batch_size if args.batch_size > 0 else (128 if torch.cuda.is_available() else 4)
+    
+    ptb_type = args.ptb_type
 
     texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer)
 
-
-    BATCH_SIZE = 16
-
-    from tqdm import tqdm
-
-    os.makedirs(f'results/{args.model}/ablated/{ptb_type}/l={l}_h={h}_pct={ptb_pct}_{ablate_type}', exist_ok=True)
+    os.makedirs(f'results_{tagline}/{args.model}/{ptb_type}/{ptb_pct}', exist_ok=True)
 
     try:
-        seen = set(pd.read_csv(f'results/{args.model}/ablated/{ptb_type}/l={l}_h={h}_pct={ptb_pct}_{ablate_type}/evals.csv')['sample'])
+        seen = set(pd.read_csv(f'results_{tagline}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv')['sample'])
     except:
         seen = set()
 
@@ -124,31 +126,42 @@ def run_ablation(args, ablate_type, ptb_pct, l, h):
         batch_texts = texts[i:i+BATCH_SIZE]
         batch_texts_perturbed = texts_perturbed[i:i+BATCH_SIZE]
         
-        inputs = tokenizer(batch_texts, return_tensors="pt",
+        inputs = tokenizer(batch_texts, return_tensors="pt", 
                         truncation=True, max_length=128, padding='max_length').to(device)
         inputs_perturbed = tokenizer(batch_texts_perturbed, return_tensors="pt",
                                     truncation=True, max_length=128, padding='max_length').to(device)
         
+        eval_hidden = MODEL_INFO[args.model]['eval_hidden_states']
         with torch.no_grad():
-            outputs = model(**inputs, output_hidden_states=True, output_attentions=True)
-            outputs_perturbed = model(**inputs_perturbed, output_hidden_states=True, output_attentions=True)
+            outputs = model(**inputs, output_hidden_states= eval_hidden, output_attentions=eval_hidden)
+            outputs_perturbed = model(**inputs_perturbed, output_hidden_states=eval_hidden, output_attentions=eval_hidden)
         
-        res = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, i, output_only=True)
+        res = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, i, output_only=(not eval_hidden))
 
         res = res[~res['sample'].isin(seen)]
         if not args.debug:
-            res.to_csv(f'results/{args.model}/ablated/{ptb_type}/l={l}_h={h}_pct={ptb_pct}_{ablate_type}/evals.csv', 
+            res.to_csv(f'results_{tagline}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv', 
                                     mode='a', header=(i==0 and len(seen) == 0), index=False)
         else:
-            res.to_csv('results/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
+            res.to_csv(f'results_{tagline}/{args.model}/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
         
         del outputs, outputs_perturbed
     handle.remove() 
+    print(f"Total time taken: {time() - start_time:.2f} seconds")
 
 def run(args):
-    entropy_heads = id_ablation_heads_entropy(args)
-    for l, h, pct, classif in entropy_heads:
-        run_ablation(args, classif, pct, l, h)
+    # entropy_heads = id_ablation_heads_entropy(args)
+    # for l, h, pct, classif in entropy_heads:
+
+    for l in range(12):
+        for h in range(12):
+            classif = ''
+            run_ablation(args, classif, 5, l, h)
+            run_ablation(args, classif, 30, l, h)
+
+            if args.ptb_type == 'char':
+                # perturbed baseline
+                run_ablation(args, classif, 0, l, h)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Params: perturb_type, perturb_pct")
@@ -157,6 +170,7 @@ if __name__ == "__main__":
     parser.add_argument("--ptb-type", help="Perturbation type: ['char', 'token', 'shuffle']", type=str, default='char')
     parser.add_argument("--seed", help="Random seed", type=int, default=1)
     parser.add_argument("--debug", action='store_true')
+    parser.add_argument("--output-tag", help="Tag for output directory", type=str, default='')
 
     args = parser.parse_args()
 
