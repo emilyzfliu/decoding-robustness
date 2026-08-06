@@ -1,0 +1,7 @@
+transformers>=4.24.0,<4.50
+datasets>=2.21.0
+pandas
+numpy
+scipy
+nltk
+python-Levenshtein
