@@ -70,7 +70,7 @@ def id_ablation_heads_entropy(args):
     
     return [x[0] for x in top_heads]
 
-def run_ablation(args, ablate_type, ptb_pct, l, h):
+def run_ablation(args, ptb_pct, l, h):
     start_time = time()
     SEQ_LEN = 128 if not args.debug else 5
 
@@ -118,7 +118,7 @@ def run_ablation(args, ablate_type, ptb_pct, l, h):
     os.makedirs(f'results_{tagline}/{args.model}/{ptb_type}/{ptb_pct}', exist_ok=True)
 
     try:
-        seen = set(pd.read_csv(f'results_{tagline}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv')['sample'])
+        seen = set(pd.read_csv(f'results_{tagline}/{args.model}/{ptb_type}/{ptb_pct}/l_{l}_h_{h}_evals.csv')['sample'])
     except:
         seen = set()
 
@@ -140,7 +140,7 @@ def run_ablation(args, ablate_type, ptb_pct, l, h):
 
         res = res[~res['sample'].isin(seen)]
         if not args.debug:
-            res.to_csv(f'results_{tagline}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv', 
+            res.to_csv(f'results_{tagline}/{args.model}/{ptb_type}/{ptb_pct}/l_{l}_h_{h}_evals.csv', 
                                     mode='a', header=(i==0 and len(seen) == 0), index=False)
         else:
             res.to_csv(f'results_{tagline}/{args.model}/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
@@ -155,13 +155,12 @@ def run(args):
 
     for l in range(12):
         for h in range(12):
-            classif = ''
-            run_ablation(args, classif, 5, l, h)
-            run_ablation(args, classif, 30, l, h)
+            run_ablation(args, 5, l, h)
+            run_ablation(args, 30, l, h)
 
             if args.ptb_type == 'char':
                 # perturbed baseline
-                run_ablation(args, classif, 0, l, h)
+                run_ablation(args, 0, l, h)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Params: perturb_type, perturb_pct")
