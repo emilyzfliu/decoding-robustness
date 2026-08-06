@@ -33,8 +33,8 @@ export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
 
 for ptb_type in 'word' 'typo' 'synonym'; do
-    python main.py --ptb-type $ptb_type --ptb-pct 5
-    python main.py --ptb-type $ptb_type --ptb-pct 30
+    python main.py --ptb-type $ptb_type --ptb-pct 5 --output-tag 'clean_run'
+    python main.py --ptb-type $ptb_type --ptb-pct 30 --output-tag 'clean_run'
 done
 
 # Ablation experiments - Only run after base

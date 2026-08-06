@@ -22,7 +22,7 @@ def run(args):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    datetime_lbl = time.strftime("%Y%m%d-%H%M%S")
+    tagline = args.output_tag if hasattr(args, 'output_tag') else ''
     # Set up models
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -67,10 +67,10 @@ def run(args):
         
         texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer)
 
-        os.makedirs(f'results_{datetime_lbl}/{args.model}/{ptb_type}/{ptb_pct}', exist_ok=True)
+        os.makedirs(f'results_{tagline}/{args.model}/{ptb_type}/{ptb_pct}', exist_ok=True)
 
         try:
-            seen = set(pd.read_csv(f'results_{datetime_lbl}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv')['sample'])
+            seen = set(pd.read_csv(f'results_{tagline}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv')['sample'])
         except:
             seen = set()
 
@@ -92,10 +92,10 @@ def run(args):
 
             res = res[~res['sample'].isin(seen)]
             if not args.debug:
-                res.to_csv(f'results_{datetime_lbl}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv', 
+                res.to_csv(f'results_{tagline}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv', 
                                         mode='a', header=(i==0 and len(seen) == 0), index=False)
             else:
-                res.to_csv(f'results_{datetime_lbl}/{args.model}/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
+                res.to_csv(f'results_{tagline}/{args.model}/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
             
             del outputs, outputs_perturbed
     print(f"Total time taken: {time() - start_time:.2f} seconds")
@@ -111,6 +111,7 @@ if __name__ == "__main__":
     parser.add_argument("--n-samples", help="Number of sequences to sample (-1 = use all)", type=int, default=-1)
     parser.add_argument("--batch-size", help="Batch size (<=0 = auto: 128 GPU / 4 CPU)", type=int, default=0)
     parser.add_argument("--debug", action='store_true')
+    parser.add_argument("--output-tag", help="Tag for output directory", type=str, default='')
 
     args = parser.parse_args()
 
