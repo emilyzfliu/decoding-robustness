@@ -165,9 +165,12 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Params: perturb_type, perturb_pct")
 
-    parser.add_argument("--model", help="Model name (must be in config.MODEL_INFO)", type=str, default='gpt2')
+    
+    parser.add_argument("--model", help="Model name", type=str, default='gpt2')
     parser.add_argument("--ptb-type", help="Perturbation type: ['char', 'token', 'shuffle']", type=str, default='char')
     parser.add_argument("--seed", help="Random seed", type=int, default=1)
+    parser.add_argument("--n-samples", help="Number of sequences to sample (-1 = use all)", type=int, default=-1)
+    parser.add_argument("--batch-size", help="Batch size (<=0 = auto: 128 GPU / 4 CPU)", type=int, default=0)
     parser.add_argument("--debug", action='store_true')
     parser.add_argument("--output-tag", help="Tag for output directory", type=str, default='')
 
