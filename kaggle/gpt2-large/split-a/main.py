@@ -75,9 +75,11 @@ def prepare_source() -> None:
 def main() -> None:
     started = time.time()
     log_path = ROOT / "five_model_run.log"
+    complete_path = ROOT / "run_complete.json"
     # A Kaggle rerun can reuse /kaggle/working; keep completion checks scoped
     # to this invocation rather than stale failures from an earlier attempt.
     log_path.write_text("", encoding="utf-8")
+    complete_path.unlink(missing_ok=True)
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     install_dependencies()
     prepare_source()
@@ -112,12 +114,16 @@ def main() -> None:
         cwd=SOURCE,
         log_path=log_path,
     )
-    log_text = log_path.read_text(encoding="utf-8", errors="replace")
+    log_text = "\n".join(
+        path.read_text(encoding="utf-8", errors="replace")
+        for path in (log_path, RESULTS / "run_cross_model.log")
+        if path.exists()
+    )
     if "!!! FAILED" in log_text:
         raise RuntimeError(
             "One or more model/perturbation jobs failed; " "see five_model_run.log"
         )
-    (ROOT / "run_complete.json").write_text(
+    complete_path.write_text(
         json.dumps(
             {
                 "status": "completed",
