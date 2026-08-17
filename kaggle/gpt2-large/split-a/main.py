@@ -1,4 +1,8 @@
 """Kaggle runner for the five-model fixed-code robustness sweep."""
+
+# The embedded package archive is intentionally a single long base64 literal.
+# flake8: noqa: E501
+
 from __future__ import annotations
 
 import json
@@ -17,7 +21,12 @@ PERTURBATIONS = ["char", "token", "word"]
 N_SAMPLES = int(os.environ.get("ROBUSTNESS_N_SAMPLES", "300"))
 
 
-def run(command: list[str], *, cwd: Path | None = None, log_path: Path | None = None) -> None:
+def run(
+    command: list[str],
+    *,
+    cwd: Path | None = None,
+    log_path: Path | None = None,
+) -> None:
     print("$", " ".join(command), flush=True)
     if log_path is None:
         subprocess.run(command, cwd=cwd, check=True)
@@ -25,13 +34,28 @@ def run(command: list[str], *, cwd: Path | None = None, log_path: Path | None = 
     with log_path.open("a", encoding="utf-8") as log:
         proc = subprocess.run(command, cwd=cwd, stdout=log, stderr=subprocess.STDOUT)
     if proc.returncode:
-        raise RuntimeError(f"Command failed with exit code {proc.returncode}: {command}")
+        raise RuntimeError(
+            f"Command failed with exit code {proc.returncode}: {command}"
+        )
 
 
 def install_dependencies() -> None:
-    run([sys.executable, "-m", "pip", "install", "-q", "transformers<4.50",
-         "datasets>=2.21", "pandas", "numpy", "scipy", "nltk",
-         "python-Levenshtein"])
+    run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-q",
+            "transformers<4.50",
+            "datasets>=2.21",
+            "pandas",
+            "numpy",
+            "scipy",
+            "nltk",
+            "python-Levenshtein",
+        ]
+    )
 
 
 def prepare_source() -> None:
@@ -39,10 +63,12 @@ def prepare_source() -> None:
     import io
     import shutil
     import zipfile
+
     if SOURCE.exists():
         shutil.rmtree(SOURCE)
     SOURCE.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(io.BytesIO(base64.b64decode(PACKAGE_ZIP_B64))) as archive:
+    package = base64.b64decode(PACKAGE_ZIP_B64)
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
         archive.extractall(SOURCE)
 
 
@@ -53,22 +79,51 @@ def main() -> None:
     install_dependencies()
     prepare_source()
     import torch
+
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is unavailable; refusing to run on CPU")
-    manifest = {"models": MODELS, "perturbations": PERTURBATIONS,
-                "n_samples": N_SAMPLES, "cuda": torch.cuda.get_device_name(0),
-                "cuda_count": torch.cuda.device_count()}
-    (ROOT / "run_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    manifest = {
+        "models": MODELS,
+        "perturbations": PERTURBATIONS,
+        "n_samples": N_SAMPLES,
+        "cuda": torch.cuda.get_device_name(0),
+        "cuda_count": torch.cuda.device_count(),
+    }
+    (ROOT / "run_manifest.json").write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8"
+    )
     RESULTS.mkdir(parents=True, exist_ok=True)
-    run([sys.executable, "run_cross_model.py", "--models", ",".join(MODELS),
-         "--ptb-types", ",".join(PERTURBATIONS), "--n-samples", str(N_SAMPLES),
-         "--out-root", str(RESULTS)], cwd=SOURCE, log_path=log_path)
+    run(
+        [
+            sys.executable,
+            "run_cross_model.py",
+            "--models",
+            ",".join(MODELS),
+            "--ptb-types",
+            ",".join(PERTURBATIONS),
+            "--n-samples",
+            str(N_SAMPLES),
+            "--out-root",
+            str(RESULTS),
+        ],
+        cwd=SOURCE,
+        log_path=log_path,
+    )
     log_text = log_path.read_text(encoding="utf-8", errors="replace")
     if "!!! FAILED" in log_text:
-        raise RuntimeError("One or more model/perturbation jobs failed; see five_model_run.log")
-    (ROOT / "run_complete.json").write_text(json.dumps({
-        "status": "completed", "elapsed_seconds": time.time() - started,
-    }, indent=2), encoding="utf-8")
+        raise RuntimeError(
+            "One or more model/perturbation jobs failed; " "see five_model_run.log"
+        )
+    (ROOT / "run_complete.json").write_text(
+        json.dumps(
+            {
+                "status": "completed",
+                "elapsed_seconds": time.time() - started,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":
