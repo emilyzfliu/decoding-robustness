@@ -81,6 +81,9 @@ def main() -> None:
         return
     # A Kaggle retry can reuse /kaggle/working; clear stale failure logs.
     log_path.write_text("", encoding="utf-8")
+    child_log_path = RESULTS / "run_cross_model.log"
+    child_log_path.parent.mkdir(parents=True, exist_ok=True)
+    child_log_path.write_text("", encoding="utf-8")
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     install_dependencies()
     prepare_source()
