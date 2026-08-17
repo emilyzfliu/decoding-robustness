@@ -1,4 +1,4 @@
-"""Kaggle runner for the five-model fixed-code robustness sweep."""
+"""Kaggle runner for the GPT-2 Large fixed-code robustness sweep."""
 
 # The embedded package archive is intentionally a single long base64 literal.
 # flake8: noqa: E501
