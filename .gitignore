@@ -1,6 +1,7 @@
 *.ipynb
 */__pycache__
 results*
+kaggle.json
 .DS_Store
 __pycache__
 figures/
