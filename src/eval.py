@@ -2,7 +2,6 @@
 Compute ALL evaluation metrics.
 """
 
-
 import torch
 import Levenshtein
 import pandas as pd
@@ -10,37 +9,51 @@ import numpy as np
 from scipy.spatial.distance import pdist, squareform
 
 
-def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokenizer, i, output_only=False):
+def eval_loop(
+    inputs_base,
+    outputs_base,
+    inputs_perturb,
+    outputs_perturb,
+    tokenizer,
+    i,
+    output_only=False,
+):
     seq_cols = {
-        'sample': [x for x in range(outputs_base.logits.shape[0])],
-        'nll': nll(inputs_perturb, outputs_perturb),
-        'nll_base': nll(inputs_base, outputs_base),
-        'output_divergence': output_divergence(outputs_base, outputs_perturb, tokenizer),
+        "sample": [x for x in range(outputs_base.logits.shape[0])],
+        "nll": nll(inputs_perturb, outputs_perturb),
+        "nll_base": nll(inputs_base, outputs_base),
+        "output_divergence": output_divergence(
+            outputs_base, outputs_perturb, tokenizer
+        ),
     }
     if not output_only:
         seq_cols.update(activation_cka(outputs_base, outputs_perturb))
     seq_level = pd.DataFrame(seq_cols)
 
-    seq_level['sample'] = [x+i for x in seq_level['sample']]
+    seq_level["sample"] = [x + i for x in seq_level["sample"]]
 
     if output_only:
-        tok_level = pd.DataFrame({
-            **get_sample_and_token_indices(inputs_base),
-            'logit_kl': logit_kl(outputs_base, outputs_perturb)
-        })
+        tok_level = pd.DataFrame(
+            {
+                **get_sample_and_token_indices(inputs_base),
+                "logit_kl": logit_kl(outputs_base, outputs_perturb),
+            }
+        )
     else:
-        tok_level = pd.DataFrame({
-            **get_sample_and_token_indices(inputs_base),
-            **activation_similarity(outputs_base, outputs_perturb),
-            **linear_cka(outputs_base, outputs_perturb),
-            **intrinsic_dims(outputs_base, outputs_perturb),
-            **attention_entropy(outputs_perturb),
-            'logit_kl': logit_kl(outputs_base, outputs_perturb)
-        })
-    tok_level['sample'] = [x + i for x in tok_level['sample']]
-    res = pd.merge(seq_level, tok_level, on='sample', how='inner')
-    for col in res.select_dtypes(include=['float64']).columns:
-        res[col] = res[col].astype('float32')
+        tok_level = pd.DataFrame(
+            {
+                **get_sample_and_token_indices(inputs_base),
+                **activation_similarity(outputs_base, outputs_perturb),
+                **linear_cka(outputs_base, outputs_perturb),
+                **intrinsic_dims(outputs_base, outputs_perturb),
+                **attention_entropy(outputs_perturb),
+                "logit_kl": logit_kl(outputs_base, outputs_perturb),
+            }
+        )
+    tok_level["sample"] = [x + i for x in tok_level["sample"]]
+    res = pd.merge(seq_level, tok_level, on="sample", how="inner")
+    for col in res.select_dtypes(include=["float64"]).columns:
+        res[col] = res[col].astype("float32")
     return res
 
 
@@ -50,12 +63,9 @@ def get_sample_and_token_indices(inputs_base):
     sample_idx = []
     token_idx = []
     for i in range(n_samples):
-        sample_idx.extend([i]*sample_length),
+        sample_idx.extend([i] * sample_length),
         token_idx.extend([x for x in range(sample_length)])
-    return {
-        'sample': sample_idx,
-        'token_in_sample': token_idx
-    }
+    return {"sample": sample_idx, "token_in_sample": token_idx}
 
 
 def nll(inputs, outputs):
@@ -65,9 +75,8 @@ def nll(inputs, outputs):
     labels[attention_mask == 0] = -100
     shift_logits = outputs.logits[..., :-1, :].contiguous()
     shift_labels = labels[..., 1:].contiguous()
-    token_losses = torch.nn.CrossEntropyLoss(reduction='none')(
-        shift_logits.view(-1, shift_logits.size(-1)),
-        shift_labels.view(-1)
+    token_losses = torch.nn.CrossEntropyLoss(reduction="none")(
+        shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
     ).view(input_ids.size(0), -1)
     mask = (shift_labels != -100).float()
     seq_losses = (token_losses * mask).sum(dim=1) / mask.sum(dim=1)
@@ -75,9 +84,16 @@ def nll(inputs, outputs):
 
 
 def output_divergence(outputs_base, outputs_perturb, tokenizer):
-    text_base_out = tokenizer.batch_decode(torch.argmax(outputs_base.logits[:, :-1, :], dim=-1).cpu())
-    text_ptb_out = tokenizer.batch_decode(torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1).cpu())
-    return [Levenshtein.distance(x, y)/max(len(x), len(y)) for x, y in zip(text_base_out, text_ptb_out)]
+    text_base_out = tokenizer.batch_decode(
+        torch.argmax(outputs_base.logits[:, :-1, :], dim=-1).cpu()
+    )
+    text_ptb_out = tokenizer.batch_decode(
+        torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1).cpu()
+    )
+    return [
+        Levenshtein.distance(x, y) / max(len(x), len(y))
+        for x, y in zip(text_base_out, text_ptb_out)
+    ]
 
 
 def logit_kl(outputs_base, outputs_perturb):
@@ -98,9 +114,9 @@ def activation_similarity(outputs_base, outputs_perturb):
         base_i = base_hidden[i][:, :-1, :]
         ptb_i = ptb_hidden[i][:, :-1, :]
         cos_sim = torch.cosine_similarity(base_i, ptb_i, dim=-1).clamp(-1, 1)
-        ret[f'activation_cos_sim_layer_{i}'] = cos_sim.flatten().tolist()
+        ret[f"activation_cos_sim_layer_{i}"] = cos_sim.flatten().tolist()
         l2 = torch.sum((base_i - ptb_i) ** 2, dim=-1)
-        ret[f'activation_l2_dist_layer_{i}'] = l2.flatten().tolist()
+        ret[f"activation_l2_dist_layer_{i}"] = l2.flatten().tolist()
     return ret
 
 
@@ -139,7 +155,7 @@ def linear_cka(outputs_base, outputs_perturb, k=DROP_K):
         broadcast = []
         for b in range(n_samples):
             broadcast.extend([cka_vals[b]] * seq_len)
-        ret[f'cka_layer_{L}'] = broadcast
+        ret[f"cka_layer_{L}"] = broadcast
     return ret
 
 
@@ -156,7 +172,7 @@ def activation_cka(outputs_base, outputs_perturb, k=DROP_K):
             Y = ptb_hidden[L][b, :-1, :].float()
             Xs, Ys = _drop_top_var_dims(X, Y, k)
             cka_vals.append(_linear_cka(Xs, Ys))
-        ret[f'activation_cka_layer_{L}'] = cka_vals
+        ret[f"activation_cka_layer_{L}"] = cka_vals
     return ret
 
 
@@ -166,8 +182,13 @@ def twoNN_intrinsic_dim(outputs_base, outputs_perturb, n_samples=500):
     Kept for backwards compatibility with analysis scripts; the eval loop calls
     ``intrinsic_dims`` once so both estimators share one distance matrix.
     """
-    return {k: v for k, v in intrinsic_dims(outputs_base, outputs_perturb, n_samples=n_samples).items()
-            if not k.startswith('intrinsic_dim_mknn')}
+    return {
+        k: v
+        for k, v in intrinsic_dims(
+            outputs_base, outputs_perturb, n_samples=n_samples
+        ).items()
+        if not k.startswith("intrinsic_dim_mknn")
+    }
 
 
 def mknn_intrinsic_dim(outputs_base, outputs_perturb, n_samples=500):
@@ -176,8 +197,13 @@ def mknn_intrinsic_dim(outputs_base, outputs_perturb, n_samples=500):
     Kept for backwards compatibility with analysis scripts; the eval loop calls
     ``intrinsic_dims`` once so both estimators share one distance matrix.
     """
-    return {k: v for k, v in intrinsic_dims(outputs_base, outputs_perturb, n_samples=n_samples).items()
-            if k.startswith('intrinsic_dim_mknn')}
+    return {
+        k: v
+        for k, v in intrinsic_dims(
+            outputs_base, outputs_perturb, n_samples=n_samples
+        ).items()
+        if k.startswith("intrinsic_dim_mknn")
+    }
 
 
 def intrinsic_dims(outputs_base, outputs_perturb, n_samples=500):
@@ -201,21 +227,31 @@ def intrinsic_dims(outputs_base, outputs_perturb, n_samples=500):
         est.append((layer_idx, clean_2nn, ptb_2nn, clean_mknn, ptb_mknn))
     ret = {}
     for layer_idx, clean_2nn, ptb_2nn, _, _ in est:
-        ret[f'intrinsic_dim_clean_layer_{layer_idx}'] = [clean_2nn or 0.0] * n_total_tokens
-        ret[f'intrinsic_dim_perturbed_layer_{layer_idx}'] = [ptb_2nn or 0.0] * n_total_tokens
+        ret[f"intrinsic_dim_clean_layer_{layer_idx}"] = [
+            clean_2nn or 0.0
+        ] * n_total_tokens
+        ret[f"intrinsic_dim_perturbed_layer_{layer_idx}"] = [
+            ptb_2nn or 0.0
+        ] * n_total_tokens
         if clean_2nn is not None and ptb_2nn is not None:
             change_2nn = ptb_2nn - clean_2nn
         else:
             change_2nn = 0.0
-        ret[f'intrinsic_dim_change_layer_{layer_idx}'] = [change_2nn] * n_total_tokens
+        ret[f"intrinsic_dim_change_layer_{layer_idx}"] = [change_2nn] * n_total_tokens
     for layer_idx, _, _, clean_mknn, ptb_mknn in est:
-        ret[f'intrinsic_dim_mknn_clean_layer_{layer_idx}'] = [clean_mknn or 0.0] * n_total_tokens
-        ret[f'intrinsic_dim_mknn_perturbed_layer_{layer_idx}'] = [ptb_mknn or 0.0] * n_total_tokens
+        ret[f"intrinsic_dim_mknn_clean_layer_{layer_idx}"] = [
+            clean_mknn or 0.0
+        ] * n_total_tokens
+        ret[f"intrinsic_dim_mknn_perturbed_layer_{layer_idx}"] = [
+            ptb_mknn or 0.0
+        ] * n_total_tokens
         if clean_mknn is not None and ptb_mknn is not None:
             change_mknn = ptb_mknn - clean_mknn
         else:
             change_mknn = 0.0
-        ret[f'intrinsic_dim_mknn_change_layer_{layer_idx}'] = [change_mknn] * n_total_tokens
+        ret[f"intrinsic_dim_mknn_change_layer_{layer_idx}"] = [
+            change_mknn
+        ] * n_total_tokens
     return ret
 
 
@@ -248,7 +284,7 @@ def _estimate_dims_2nn_mknn(points, n_samples=500):
             rng = np.random.RandomState(42)
             idx = rng.choice(n_total, size=n_use, replace=False)
             points = points[idx]
-        dist_matrix = squareform(pdist(points, metric='euclidean'))
+        dist_matrix = squareform(pdist(points, metric="euclidean"))
         np.fill_diagonal(dist_matrix, np.inf)
         sorted_dists = np.sort(dist_matrix, axis=1)
         r1 = sorted_dists[:, 0]
@@ -300,7 +336,7 @@ def estimate_intrinsic_dim_2nn(points, n_samples=500, n_use=1000, seed=42):
         else:
             points_sub = points
             n_use = n_total
-        dist_matrix = squareform(pdist(points_sub, metric='euclidean'))
+        dist_matrix = squareform(pdist(points_sub, metric="euclidean"))
         np.fill_diagonal(dist_matrix, np.inf)
         sorted_dists = np.sort(dist_matrix, axis=1)
         r1 = sorted_dists[:, 0]
@@ -344,7 +380,7 @@ def estimate_intrinsic_dim_mknn(points, n_samples=500, n_use=1000, seed=42):
         else:
             points_sub = points
             n_use = n_total
-        dist_matrix = squareform(pdist(points_sub, metric='euclidean'))
+        dist_matrix = squareform(pdist(points_sub, metric="euclidean"))
         np.fill_diagonal(dist_matrix, np.inf)
         sorted_dists = np.sort(dist_matrix, axis=1)
         r1 = sorted_dists[:, 0]
@@ -372,7 +408,9 @@ def attention_entropy(outputs):
     attentions = outputs.attentions
     ret = {}
     for i in range(len(attentions)):
-        layer_att = attentions[i].float()  # fp16 clamp(log) underflows to NaN; compute in fp32
+        layer_att = attentions[
+            i
+        ].float()  # fp16 clamp(log) underflows to NaN; compute in fp32
         _, nh, seq_len, _ = layer_att.shape
         head_att = layer_att[:, :, :-1, :]
         mask = head_att > 0
@@ -380,5 +418,5 @@ def attention_entropy(outputs):
         ent = -torch.sum(mask * head_att * torch.log(safe_att), dim=-1)
         max_ent = torch.log(torch.tensor(float(seq_len)))
         ent_norm = (ent / max_ent).mean(dim=1)  # mean over heads
-        ret[f'attn_entropy_layer_{i}'] = ent_norm.flatten().tolist()
+        ret[f"attn_entropy_layer_{i}"] = ent_norm.flatten().tolist()
     return ret
