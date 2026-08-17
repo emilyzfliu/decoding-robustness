@@ -19,7 +19,7 @@ The project analyzes how these perturbations affect:
 
 ## Model
 
-Experiments are performed using GPT-2 small (`openai-community/gpt2`) to enable efficient CPU-based analysis and full-layer instrumentation.
+The primary local experiments use GPT-2 small (`openai-community/gpt2`) to enable efficient CPU-based analysis and full-layer instrumentation. A separate GPT-2 Large robustness sweep runs through the Kaggle kernels under `kaggle/gpt2-large/`.
 
 ## Dataset
 
