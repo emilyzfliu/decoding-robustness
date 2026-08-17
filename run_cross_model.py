@@ -88,7 +88,8 @@ def main():
     failures = 0
     for model in models:
         for ptb_type in ptb_types:
-            if not args.force and model_dir_complete(args.out_root, model, ptb_type):
+            if not args.force and model_dir_complete(
+                    args.out_root, model, ptb_type, n_samples=args.n_samples):
                 log(f'skip (complete): {model}/{ptb_type}', log_path)
                 continue
             total_est += 1

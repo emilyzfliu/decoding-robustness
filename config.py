@@ -28,7 +28,7 @@ MODEL_INFO = {
         'num_layers': 48,
         'num_heads': 25,
         'attn_implementation': 'eager',
-'eval_hidden_states': True,
+        'eval_hidden_states': True,
         'max_batch_size': 2,
         'dtype': 'fp16'},
     'qwen2.5_0.5b': {

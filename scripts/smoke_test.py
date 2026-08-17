@@ -33,9 +33,9 @@ def probe(model_key, batch_size=2, seq_len=128):
     mask = torch.ones_like(ids)
     t0 = time.time()
     with torch.no_grad():
-        out = model(input_ids=ids, attention_mask=mask,
-                    output_hidden_states=info['eval_hidden_states'],
-                    output_attentions=info['eval_hidden_states'])
+        model(input_ids=ids, attention_mask=mask,
+              output_hidden_states=info['eval_hidden_states'],
+              output_attentions=info['eval_hidden_states'])
     fwd_s = time.time() - t0
     peak_gb = torch.cuda.max_memory_allocated() / 1e9
     torch.cuda.empty_cache()

@@ -7,7 +7,6 @@ import torch
 import Levenshtein
 import pandas as pd
 import numpy as np
-from scipy.stats import entropy
 from scipy.spatial.distance import pdist, squareform
 
 
@@ -316,7 +315,7 @@ def estimate_intrinsic_dim_2nn(points, n_samples=500, n_use=1000, seed=42):
         if not np.isfinite(denom) or denom <= 1e-10:
             return None
         return float(len(mu) / denom)
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -358,7 +357,7 @@ def estimate_intrinsic_dim_mknn(points, n_samples=500, n_use=1000, seed=42):
         if not np.isfinite(denom) or denom <= 1e-10:
             return None
         return float(len(r1) / denom)
-    except Exception as e:
+    except Exception:
         return None
 
 
