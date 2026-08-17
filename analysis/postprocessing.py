@@ -25,22 +25,39 @@ def compute_activation_similarity_metrics(model, seq):
     
     return slope, p, r**2, auc, values[-1]
 
+
+def _read_attention_entropy(path, model):
+    layer_cols = [f'attn_entropy_layer_{i}' for i in range(MODEL_INFO[model]['num_layers'])]
+    try:
+        return pd.read_csv(path, usecols=layer_cols)
+    except ValueError:
+        head_cols = [
+            f'attn_layer{i}_head_{h}_entropy_norm'
+            for i in range(MODEL_INFO[model]['num_layers'])
+            for h in range(MODEL_INFO[model]['num_heads'])
+        ]
+        legacy = pd.read_csv(path, usecols=head_cols)
+        return pd.DataFrame({
+            f'attn_entropy_layer_{i}': legacy[
+                [f'attn_layer{i}_head_{h}_entropy_norm' for h in range(MODEL_INFO[model]['num_heads'])]
+            ].mean(axis=1)
+            for i in range(MODEL_INFO[model]['num_layers'])
+        })
+
 # all in one, some data loss
 def compute_attention_entropy_metrics_comparison(ptb_type, n_bins=5):
     all_data = {'model': [], 'depth_bin': [], 'slope': []}
 
     for model in MODEL_INFO.keys():
         num_layers = MODEL_INFO[model]['num_layers']
-        head_indices = list(range(MODEL_INFO[model]['num_heads']))
         ptb_pcts = [x*5 for x in range(11)] if ptb_type != 'shuffle' else [x*5 for x in range(21)]
 
-        entropy_cols = [f'attn_layer{i}_head_{h}_entropy_norm' for i in range(num_layers) for h in head_indices]
         dfs_by_pct = {}
         for pct in ptb_pcts:
             try:
-                seq = pd.read_csv(f'results/{model}/{ptb_type}/{pct}/evals.csv', usecols=entropy_cols)
+                seq = _read_attention_entropy(f'results/{model}/{ptb_type}/{pct}/evals.csv', model)
             except (FileNotFoundError, ValueError):
-                seq = pd.read_csv(f'results/{model}/char/0/evals.csv', usecols=entropy_cols)
+                seq = _read_attention_entropy(f'results/{model}/char/0/evals.csv', model)
             dfs_by_pct[pct] = seq
 
         ptb_arr = np.array(ptb_pcts, dtype=float)
@@ -53,16 +70,13 @@ def compute_attention_entropy_metrics_comparison(ptb_type, n_bins=5):
             depth_frac = i / (num_layers - 1) if num_layers > 1 else 0
             b = min(np.digitize(depth_frac, bin_edges) - 1, n_bins - 1)
 
-            means = np.array([
-                [dfs_by_pct[pct][f'attn_layer{i}_head_{h}_entropy_norm'].mean() for h in head_indices]
-                for pct in ptb_pcts
-            ])
-            y_centered = means - means.mean(axis=0, keepdims=True)
-            slopes = (x_centered[:, None] * y_centered).sum(axis=0) / denom
+            means = np.array([dfs_by_pct[pct][f'attn_entropy_layer_{i}'].mean() for pct in ptb_pcts])
+            y_centered = means - means.mean()
+            slopes = np.array([(x_centered * y_centered).sum() / denom])
 
             all_data['slope'].extend(slopes.tolist())
-            all_data['depth_bin'].extend([b] * len(head_indices))
-            all_data['model'].extend([MODEL_PLOT_CONFIG[model]['name']] * len(head_indices))
+            all_data['depth_bin'].append(b)
+            all_data['model'].append(MODEL_PLOT_CONFIG[model]['name'])
 
     df = pd.DataFrame(all_data)
 
@@ -86,16 +100,14 @@ def compute_attention_entropy_metrics(ptb_type):
     for model in MODEL_INFO.keys():
         print('Computing attention entropy metrics for model:', model)
         layer_indices = list(range(MODEL_INFO[model]['num_layers']))
-        head_indices = list(range(MODEL_INFO[model]['num_heads']))
         ptb_pcts = [x*5 for x in range(11)] if ptb_type != 'shuffle' else [x*5 for x in range(21)]
 
-        entropy_cols = [f'attn_layer{i}_head_{h}_entropy_norm' for i in layer_indices for h in head_indices]
         dfs_by_pct = {}
         for pct in ptb_pcts:
             try:
-                seq = pd.read_csv(f'results/{model}/{ptb_type}/{pct}/evals.csv', usecols=entropy_cols)
+                seq = _read_attention_entropy(f'results/{model}/{ptb_type}/{pct}/evals.csv', model)
             except (FileNotFoundError, ValueError):
-                seq = pd.read_csv(f'results/{model}/char/0/evals.csv', usecols=entropy_cols)
+                seq = _read_attention_entropy(f'results/{model}/char/0/evals.csv', model)
             dfs_by_pct[pct] = seq
 
         ptb_arr = np.array(ptb_pcts, dtype=float)
@@ -105,14 +117,11 @@ def compute_attention_entropy_metrics(ptb_type):
 
         plot_dat = {'layer': [], 'slope': []}
         for i in layer_indices:
-            means = np.array([
-                [dfs_by_pct[pct][f'attn_layer{i}_head_{h}_entropy_norm'].mean() for h in head_indices]
-                for pct in ptb_pcts
-            ])
-            y_centered = means - means.mean(axis=0, keepdims=True)
-            slopes = (x_centered[:, None] * y_centered).sum(axis=0) / denom  # vectorized linregress slope
-            plot_dat['slope'].extend(slopes.tolist())
-            plot_dat['layer'].extend([i] * len(head_indices))
+            means = np.array([dfs_by_pct[pct][f'attn_entropy_layer_{i}'].mean() for pct in ptb_pcts])
+            y_centered = means - means.mean()
+            slope = (x_centered * y_centered).sum() / denom
+            plot_dat['slope'].append(slope)
+            plot_dat['layer'].append(i)
 
         fig, ax = plt.subplots(figsize=(10, 3))
         sns.violinplot(plot_dat, x='layer', y='slope', palette=[MODEL_PLOT_CONFIG[model]['color']], hue='layer', legend=False, ax=ax)

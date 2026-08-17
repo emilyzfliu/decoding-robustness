@@ -63,8 +63,10 @@ def run_one(model, ptb_type, out_root, n_samples, log_path):
     dt = (time.time() - t0) / 60
     if proc.returncode != 0:
         log(f'!!! FAILED {model}/{ptb_type} (exit {proc.returncode})', log_path)
+        return False
     else:
         log(f'    done {model}/{ptb_type} in {dt:.1f} min', log_path)
+        return True
 
 
 def main():
@@ -83,16 +85,22 @@ def main():
     ptb_types = [t.strip() for t in args.ptb_types.split(',') if t.strip()]
 
     total_est = 0
+    failures = 0
     for model in models:
         for ptb_type in ptb_types:
             if not args.force and model_dir_complete(args.out_root, model, ptb_type):
                 log(f'skip (complete): {model}/{ptb_type}', log_path)
                 continue
             total_est += 1
-            run_one(model, ptb_type, args.out_root, args.n_samples, log_path)
+            if not run_one(model, ptb_type, args.out_root, args.n_samples, log_path):
+                failures += 1
 
+    if failures:
+        log(f'FAILED: {failures}/{total_est} (model, type) jobs failed.', log_path)
+        return 1
     log(f'ALL DONE. {total_est} (model, type) jobs executed.', log_path)
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

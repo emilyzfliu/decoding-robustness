@@ -25,10 +25,12 @@ def run(args):
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     dtype = torch.float16 if MODEL_INFO[args.model]['dtype'] == 'fp16' else torch.float32
+    if device.type != 'cuda':
+        dtype = torch.float32
     model = AutoModelForCausalLM.from_pretrained(
       model_name, 
       attn_implementation=MODEL_INFO[args.model]['attn_implementation'],
-      dtype=dtype
+      torch_dtype=dtype
     ).to(device)
 
     model.eval()
