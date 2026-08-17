@@ -75,6 +75,9 @@ def prepare_source() -> None:
 def main() -> None:
     started = time.time()
     log_path = ROOT / "five_model_run.log"
+    # A Kaggle rerun can reuse /kaggle/working; keep completion checks scoped
+    # to this invocation rather than stale failures from an earlier attempt.
+    log_path.write_text("", encoding="utf-8")
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     install_dependencies()
     prepare_source()
