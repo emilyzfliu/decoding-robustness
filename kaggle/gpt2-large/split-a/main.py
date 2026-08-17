@@ -76,9 +76,7 @@ def main() -> None:
     started = time.time()
     log_path = ROOT / "five_model_run.log"
     complete_path = ROOT / "run_complete.json"
-    if complete_path.exists():
-        print(f"Already complete: {complete_path}", flush=True)
-        return
+    complete_path.unlink(missing_ok=True)
     # A Kaggle retry can reuse /kaggle/working; clear stale failure logs.
     log_path.write_text("", encoding="utf-8")
     child_log_path = RESULTS / "run_cross_model.log"
