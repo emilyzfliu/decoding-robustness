@@ -76,10 +76,11 @@ def main() -> None:
     started = time.time()
     log_path = ROOT / "five_model_run.log"
     complete_path = ROOT / "run_complete.json"
-    # A Kaggle rerun can reuse /kaggle/working; keep completion checks scoped
-    # to this invocation rather than stale failures from an earlier attempt.
+    if complete_path.exists():
+        print(f"Already complete: {complete_path}", flush=True)
+        return
+    # A Kaggle retry can reuse /kaggle/working; clear stale failure logs.
     log_path.write_text("", encoding="utf-8")
-    complete_path.unlink(missing_ok=True)
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     install_dependencies()
     prepare_source()
