@@ -125,13 +125,13 @@ Primarily probes:
 src/eval.py                         # All metrics (incl. CKA, TwoNN, MKNN)
 src/perturbs.py                     # All perturbation implementations
 main.py                             # Base experiment eval loop
-ablations.py                        # Eval loop with single-head ablations
-figures.py                          # Generate all writeup figures
-compare_bpe_vs_word.py              # BPE vs word-level substitution experiment
-plot_comparison.py                  # Figures for the BPE vs word comparison
-compare_perturbation_types.py       # Cross-type CKA comparison across 6 ptbs
-validate_intrinsic_dim.py           # Convergence/bootstrap validation of TwoNN/MKNN
-test_quick.py                       # Smoke-test suite for perturbations & metrics
+analysis/ablations.py               # Eval loop with single-head ablations
+analysis/figures.py                 # Generate all writeup figures
+analysis/compare_bpe_vs_word.py     # BPE vs word-level substitution experiment
+analysis/plot_comparison.py         # Figures for the BPE vs word comparison
+analysis/compare_perturbation_types.py  # Cross-type CKA comparison across 6 ptbs
+analysis/validate_intrinsic_dim.py  # Convergence/bootstrap validation of TwoNN/MKNN
+analysis/test_quick.py              # Smoke-test suite for perturbations & metrics
 ```
 
 Results live under `results/{model}/{ptb_type}/{pct}/evals.csv` (the layout written

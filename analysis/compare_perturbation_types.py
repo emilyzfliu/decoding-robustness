@@ -180,7 +180,7 @@ def main():
     ax.set_xticks(layers)
     ax.legend()
     plt.tight_layout()
-    out_a = os.path.join(args.out_dir, f"cross_type_cka_by_layer.png")
+    out_a = os.path.join(args.out_dir, "cross_type_cka_by_layer.png")
     plt.savefig(out_a, bbox_inches="tight", dpi=150)
     print(f"Saved {out_a}")
 
