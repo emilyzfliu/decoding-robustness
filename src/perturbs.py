@@ -2,62 +2,83 @@
 File for all perturbation implementations.
 Outside code should only ever call function `perturb`
 """
+
 import re
 import string
 
 try:
     import nltk
     from nltk.corpus import wordnet as wn
+
     _HAS_NLTK = True
 except ImportError:
     _HAS_NLTK = False
 
 # QWERTY keyboard adjacency map for realistic typo simulation
 QWERTY_ADJACENT = {
-    'q': ['w', 'a'], 'w': ['q', 'e', 's', 'a'], 'e': ['w', 'r', 'd', 's'],
-    'r': ['e', 't', 'f', 'd'], 't': ['r', 'y', 'g', 'f'], 'y': ['t', 'u', 'h', 'g'],
-    'u': ['y', 'i', 'j', 'h'], 'i': ['u', 'o', 'k', 'j'], 'o': ['i', 'p', 'l', 'k'],
-    'p': ['o', '[', 'l'], 'a': ['q', 'w', 's', 'z'], 's': ['w', 'e', 'a', 'd', 'x', 'z'],
-    'd': ['e', 'r', 's', 'f', 'c', 'x'], 'f': ['r', 't', 'd', 'g', 'v', 'c'],
-    'g': ['t', 'y', 'f', 'h', 'b', 'v'], 'h': ['y', 'u', 'g', 'j', 'n', 'b'],
-    'j': ['u', 'i', 'h', 'k', 'm', 'n'], 'k': ['i', 'o', 'j', 'l', 'm'],
-    'l': ['o', 'p', 'k', ';'], 'z': ['a', 's', 'x'], 'x': ['s', 'd', 'z', 'c'],
-    'c': ['d', 'f', 'x', 'v'], 'v': ['f', 'g', 'c', 'b'],
-    'b': ['g', 'h', 'v', 'n'], 'n': ['h', 'j', 'b', 'm'],
-    'm': ['j', 'k', 'n'],
+    "q": ["w", "a"],
+    "w": ["q", "e", "s", "a"],
+    "e": ["w", "r", "d", "s"],
+    "r": ["e", "t", "f", "d"],
+    "t": ["r", "y", "g", "f"],
+    "y": ["t", "u", "h", "g"],
+    "u": ["y", "i", "j", "h"],
+    "i": ["u", "o", "k", "j"],
+    "o": ["i", "p", "l", "k"],
+    "p": ["o", "[", "l"],
+    "a": ["q", "w", "s", "z"],
+    "s": ["w", "e", "a", "d", "x", "z"],
+    "d": ["e", "r", "s", "f", "c", "x"],
+    "f": ["r", "t", "d", "g", "v", "c"],
+    "g": ["t", "y", "f", "h", "b", "v"],
+    "h": ["y", "u", "g", "j", "n", "b"],
+    "j": ["u", "i", "h", "k", "m", "n"],
+    "k": ["i", "o", "j", "l", "m"],
+    "l": ["o", "p", "k", ";"],
+    "z": ["a", "s", "x"],
+    "x": ["s", "d", "z", "c"],
+    "c": ["d", "f", "x", "v"],
+    "v": ["f", "g", "c", "b"],
+    "b": ["g", "h", "v", "n"],
+    "n": ["h", "j", "b", "m"],
+    "m": ["j", "k", "n"],
 }
 
 # Common punctuation typos (adjacent on keyboard or commonly confused)
 PUNCT_TYPOS = {
-    '.': [',', '?', '!'],
-    ',': ['.', ';'],
-    '?': ['.', '!'],
-    '!': ['.', '?'],
-    ';': [',', ':'],
-    ':': [';', '.'],
-    "'": ['"', '`'],
-    '"': ["'", '`'],
+    ".": [",", "?", "!"],
+    ",": [".", ";"],
+    "?": [".", "!"],
+    "!": [".", "?"],
+    ";": [",", ":"],
+    ":": [";", "."],
+    "'": ['"', "`"],
+    '"': ["'", "`"],
 }
 
 
 def perturb(texts, perturb_pct, rng, ptb_type, tokenizer, model=None):
-    if ptb_type == 'char':
+    if ptb_type == "char":
         return character_substitution(texts, perturb_pct, rng)
-    elif ptb_type == 'token':
+    elif ptb_type == "token":
         return token_substitution(texts, perturb_pct, rng, tokenizer)
-    elif ptb_type == 'word':
+    elif ptb_type == "word":
         return word_substitution(texts, perturb_pct, rng, tokenizer)
-    elif ptb_type == 'shuffle':
+    elif ptb_type == "shuffle":
         return token_shuffle(texts, perturb_pct, rng, tokenizer=tokenizer)
-    elif ptb_type == 'typo':
+    elif ptb_type == "typo":
         return typo_perturbation(texts, perturb_pct, rng)
-    elif ptb_type == 'synonym':
+    elif ptb_type == "synonym":
         return synonym_substitution(texts, perturb_pct, rng, tokenizer)
-    elif ptb_type == 'adv':
-        return adversarial_token_substitution(texts, perturb_pct, rng, tokenizer, model=model)
+    elif ptb_type == "adv":
+        return adversarial_token_substitution(
+            texts, perturb_pct, rng, tokenizer, model=model
+        )
     else:
-        raise TypeError("ptb_type must be one of ['char', 'token', 'word', 'shuffle', 'typo', 'synonym', 'adv']")
-    
+        raise TypeError(
+            "ptb_type must be one of ['char', 'token', 'word', 'shuffle', 'typo', 'synonym', 'adv']"
+        )
+
 
 def character_substitution(texts, perturb_pct, rng):
     """
@@ -72,7 +93,7 @@ def character_substitution(texts, perturb_pct, rng):
                 word.append(rng.choice(sub_pool))
             else:
                 word.append(c)
-        ret.append(''.join(word))
+        ret.append("".join(word))
     return ret
 
 
@@ -93,7 +114,7 @@ def typo_perturbation(texts, perturb_pct, rng):
                 chars[i] = replacement
             elif c in PUNCT_TYPOS and rng.randint(1, 100) <= perturb_pct:
                 chars[i] = rng.choice(PUNCT_TYPOS[c])
-        ret.append(''.join(chars))
+        ret.append("".join(chars))
     return ret
 
 
@@ -102,49 +123,53 @@ def token_substitution(texts, perturb_pct, rng, tokenizer, max_length=128):
     Substitute random tokens from the tokenizer vocabulary.
     """
     encodings = tokenizer(
-        texts,
-        truncation=True,
-        max_length=max_length,
-        add_special_tokens=False
+        texts, truncation=True, max_length=max_length, add_special_tokens=False
     )
-    
+
     ret = []
-    for input_ids in encodings['input_ids']:
+    for input_ids in encodings["input_ids"]:
         new_ids = [
-            rng.randint(0, tokenizer.vocab_size - 1) 
-            if rng.randint(1, 100) < perturb_pct 
-            else tid
+            (
+                rng.randint(0, tokenizer.vocab_size - 1)
+                if rng.randint(1, 100) < perturb_pct
+                else tid
+            )
             for tid in input_ids
         ]
         ret.append(tokenizer.decode(new_ids))
-    
+
     return ret
 
 
 # Cache for word vocabulary (built once, shared across calls)
 _WORD_VOCAB_CACHE = {}
 
+
 def _get_word_vocab(tokenizer):
     """Build and cache a word-level vocabulary from the tokenizer."""
-    cache_key = tokenizer.name_or_path if hasattr(tokenizer, 'name_or_path') else str(id(tokenizer))
-    
+    cache_key = (
+        tokenizer.name_or_path
+        if hasattr(tokenizer, "name_or_path")
+        else str(id(tokenizer))
+    )
+
     if cache_key in _WORD_VOCAB_CACHE:
         return _WORD_VOCAB_CACHE[cache_key]
-    
+
     # Build vocabulary by decoding first 10000 tokens and extracting alphabetic words
     word_set = set()
     for i in range(min(10000, tokenizer.vocab_size)):
         decoded = tokenizer.decode([i]).strip()
         if len(decoded) > 1 and decoded.isalpha():
             word_set.add(decoded)
-    
+
     # Fallback to scanning full vocab if not enough words found
     if len(word_set) < 1000:
         for token, tid in tokenizer.vocab.items():
             decoded = tokenizer.decode([tid]).strip()
             if len(decoded) > 1 and decoded.isalpha():
                 word_set.add(decoded)
-    
+
     word_vocab = list(word_set)
     _WORD_VOCAB_CACHE[cache_key] = word_vocab
     return word_vocab
@@ -155,22 +180,22 @@ def word_substitution(texts, perturb_pct, rng, tokenizer, max_length=128):
     Substitute random WORDS (whitespace-separated) from the tokenizer vocabulary.
     """
     word_vocab = _get_word_vocab(tokenizer)
-    
+
     ret = []
     for text in texts:
         words = text.split()
         n_words = len(words)
         n_to_replace = max(1, int(perturb_pct * n_words / 100))
-        
+
         # Select random word positions to replace
         positions = rng.sample(range(n_words), min(n_to_replace, n_words))
-        
+
         words_list = list(words)
         for pos in positions:
             words_list[pos] = rng.choice(word_vocab)
-        
-        ret.append(' '.join(words_list))
-    
+
+        ret.append(" ".join(words_list))
+
     return ret
 
 
@@ -186,9 +211,9 @@ def _ensure_wordnet():
         return
     if _HAS_NLTK:
         try:
-            nltk.data.find('corpora/wordnet')
+            nltk.data.find("corpora/wordnet")
         except LookupError:
-            nltk.download('wordnet', quiet=True)
+            nltk.download("wordnet", quiet=True)
     _SYNONYM_INIT = True
 
 
@@ -200,9 +225,9 @@ def _get_synonyms(word):
     if _HAS_NLTK:
         for ss in wn.synsets(word):
             for lemma in ss.lemmas():
-                name = lemma.name().replace('_', ' ')
+                name = lemma.name().replace("_", " ")
                 # Keep single-token replacements only so token counts are preserved.
-                if ' ' not in name and name.lower() != word:
+                if " " not in name and name.lower() != word:
                     syns.add(name)
     result = sorted(syns)
     _SYNONYM_CACHE[word] = result
@@ -222,7 +247,7 @@ def synonym_substitution(texts, perturb_pct, rng, tokenizer=None, max_length=128
         )
     _ensure_wordnet()
 
-    word_pattern = re.compile(r'^(\W*)(\w+)(\W*)$')
+    word_pattern = re.compile(r"^(\W*)(\w+)(\W*)$")
 
     def replace_with_synonym(word):
         m = word_pattern.match(word)
@@ -249,7 +274,7 @@ def synonym_substitution(texts, perturb_pct, rng, tokenizer=None, max_length=128
         words_list = list(words)
         for pos in positions:
             words_list[pos] = replace_with_synonym(words_list[pos])
-        ret.append(' '.join(words_list))
+        ret.append(" ".join(words_list))
     return ret
 
 
@@ -262,38 +287,41 @@ def token_shuffle(texts, perturb_pct, rng, tokenizer=None, max_length=128):
         ret = []
         for text in texts:
             toks = text.split()
-            shuffle_window = int(perturb_pct*len(toks) / 100)
-            start = rng.randint(0, len(toks) - shuffle_window - 1) if perturb_pct < 100 else 0
-            tok_to_shuffle = toks[start:start+shuffle_window]
+            shuffle_window = int(perturb_pct * len(toks) / 100)
+            start = (
+                rng.randint(0, len(toks) - shuffle_window - 1)
+                if perturb_pct < 100
+                else 0
+            )
+            tok_to_shuffle = toks[start : start + shuffle_window]
             rng.shuffle(tok_to_shuffle)
-            new_toks = toks[:start] + tok_to_shuffle + toks[start+shuffle_window:]
-            ret.append(' '.join(new_toks))
+            new_toks = toks[:start] + tok_to_shuffle + toks[start + shuffle_window :]
+            ret.append(" ".join(new_toks))
         return ret
-    
+
     # BPE token-level shuffling
     encodings = tokenizer(
-        texts,
-        truncation=True,
-        max_length=max_length,
-        add_special_tokens=False
+        texts, truncation=True, max_length=max_length, add_special_tokens=False
     )
-    
+
     ret = []
-    for input_ids in encodings['input_ids']:
+    for input_ids in encodings["input_ids"]:
         n_tokens = len(input_ids)
         shuffle_window = max(1, int(perturb_pct * n_tokens / 100))
-        
+
         # Select contiguous window
         if perturb_pct < 100:
             start = rng.randint(0, n_tokens - shuffle_window)
         else:
             start = 0
             shuffle_window = n_tokens
-        
-        window = list(input_ids[start:start + shuffle_window])
+
+        window = list(input_ids[start : start + shuffle_window])
         rng.shuffle(window)
-        
-        new_ids = list(input_ids[:start]) + window + list(input_ids[start + shuffle_window:])
+
+        new_ids = (
+            list(input_ids[:start]) + window + list(input_ids[start + shuffle_window :])
+        )
         ret.append(tokenizer.decode(new_ids))
     return ret
 
@@ -317,16 +345,22 @@ def _adv_targets(texts, rng, tokenizer, max_length=128):
     if key in _ADV_FREQ_CACHE:
         return _ADV_FREQ_CACHE[key]
 
-    encodings = tokenizer(texts, truncation=True, max_length=max_length, add_special_tokens=False)
-    all_ids = encodings['input_ids']
+    encodings = tokenizer(
+        texts, truncation=True, max_length=max_length, add_special_tokens=False
+    )
+    all_ids = encodings["input_ids"]
     freq = Counter(tid for ids in all_ids for tid in ids)
 
-    ret = [(ids, np.array([freq[tid] for tid in ids], dtype=np.float32)) for ids in all_ids]
+    ret = [
+        (ids, np.array([freq[tid] for tid in ids], dtype=np.float32)) for ids in all_ids
+    ]
     _ADV_FREQ_CACHE[key] = ret
     return ret
 
 
-def adversarial_token_substitution(texts, perturb_pct, rng, tokenizer, model=None, max_length=128):
+def adversarial_token_substitution(
+    texts, perturb_pct, rng, tokenizer, model=None, max_length=128
+):
     """
     Adversarial token substitution (RQ4): targets the tokens that appear most
     frequently in the corpus (function words like 'the' carry the most
@@ -347,10 +381,9 @@ def adversarial_token_substitution(texts, perturb_pct, rng, tokenizer, model=Non
         n_to_replace = min(n_to_replace, n_tokens)
         # Adversarial: replace the positions whose tokens are most frequent in
         # the corpus. Ties are broken randomly (deterministically via rng).
-        positions = sorted(
-            range(n_tokens),
-            key=lambda j: (-freq[j], rng.random())
-        )[:n_to_replace]
+        positions = sorted(range(n_tokens), key=lambda j: (-freq[j], rng.random()))[
+            :n_to_replace
+        ]
         pos_set = set(positions)
         new_ids = [
             rng.randint(0, tokenizer.vocab_size - 1) if j in pos_set else tid

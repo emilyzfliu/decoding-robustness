@@ -1,6 +1,10 @@
 *.ipynb
 */__pycache__
 results*
+kaggle.json
+five_model_run.log
+run_manifest.json
+run_complete.json
 .DS_Store
 __pycache__
 figures/

@@ -19,7 +19,7 @@ The project analyzes how these perturbations affect:
 
 ## Model
 
-Experiments are performed using GPT-2 small (`openai-community/gpt2`) to enable efficient CPU-based analysis and full-layer instrumentation.
+The primary local experiments use GPT-2 small (`openai-community/gpt2`) to enable efficient CPU-based analysis and full-layer instrumentation. A separate GPT-2 Large robustness sweep runs through the Kaggle kernels under `kaggle/gpt2-large/`.
 
 ## Dataset
 
@@ -122,22 +122,23 @@ Primarily probes:
 ## Repository
 
 ```text
-src/evals.py                        # All metrics (incl. CKA, TwoNN, MKNN)
+src/eval.py                         # All metrics (incl. CKA, TwoNN, MKNN)
 src/perturbs.py                     # All perturbation implementations
 main.py                             # Base experiment eval loop
-ablations.py                        # Eval loop with single-head ablations
-figures.py                          # Generate all writeup figures
-compare_bpe_vs_word.py              # BPE vs word-level substitution experiment
-plot_comparison.py                  # Figures for the BPE vs word comparison
-compare_perturbation_types.py       # Cross-type CKA comparison across 6 ptbs
-validate_intrinsic_dim.py           # Convergence/bootstrap validation of TwoNN/MKNN
-test_quick.py                       # Smoke-test suite for perturbations & metrics
+analysis/ablations.py               # Eval loop with single-head ablations
+analysis/figures.py                 # Generate all writeup figures
+analysis/compare_bpe_vs_word.py     # BPE vs word-level substitution experiment
+analysis/plot_comparison.py         # Figures for the BPE vs word comparison
+analysis/compare_perturbation_types.py  # Cross-type CKA comparison across 6 ptbs
+analysis/validate_intrinsic_dim.py  # Convergence/bootstrap validation of TwoNN/MKNN
+analysis/test_quick.py              # Smoke-test suite for perturbations & metrics
 ```
 
 Results live under `results/{model}/{ptb_type}/{pct}/evals.csv` (the layout written
-by `main.py`); `--model`, `--n-samples`, and `--batch-size` control which model,
-how many sequences, and the per-step batch size. The BPE-vs-word comparison uses
-its own self-contained layout under `results/compare_bpe_word/`.
+by `main.py`); `--model`, `--n-samples`, `--batch-size`, and `--out-root` control
+which model, how many sequences, the per-step batch size, and the results root.
+The BPE-vs-word comparison uses its own self-contained layout under
+`results/compare_bpe_word/`.
 
 ## Future Directions
 
