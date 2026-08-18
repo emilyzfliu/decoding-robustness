@@ -40,7 +40,7 @@ PUNCT_TYPOS = {
 }
 
 
-def perturb(texts, perturb_pct, rng, ptb_type, tokenizer):
+def perturb(texts, perturb_pct, rng, ptb_type, tokenizer, model=None):
     if ptb_type == 'char':
         return character_substitution(texts, perturb_pct, rng)
     elif ptb_type == 'token':
@@ -53,8 +53,10 @@ def perturb(texts, perturb_pct, rng, ptb_type, tokenizer):
         return typo_perturbation(texts, perturb_pct, rng)
     elif ptb_type == 'synonym':
         return synonym_substitution(texts, perturb_pct, rng, tokenizer)
+    elif ptb_type == 'adv':
+        return adversarial_token_substitution(texts, perturb_pct, rng, tokenizer, model=model)
     else:
-        raise TypeError("ptb_type must be one of ['char', 'token', 'word', 'shuffle', 'typo', 'synonym']")
+        raise TypeError("ptb_type must be one of ['char', 'token', 'word', 'shuffle', 'typo', 'synonym', 'adv']")
     
 
 def character_substitution(texts, perturb_pct, rng):
@@ -292,5 +294,67 @@ def token_shuffle(texts, perturb_pct, rng, tokenizer=None, max_length=128):
         rng.shuffle(window)
         
         new_ids = list(input_ids[:start]) + window + list(input_ids[start + shuffle_window:])
+        ret.append(tokenizer.decode(new_ids))
+    return ret
+
+
+# Cache of per-text token frequency ranks (adversarial targeting).
+# Keyed by tuple of texts so the corpus frequency table is built once.
+_ADV_FREQ_CACHE = {}
+
+
+def _adv_targets(texts, rng, tokenizer, max_length=128):
+    """Per-text, per-token adversarial saliency = corpus token frequency.
+
+    Returns a list of (input_ids, numpy array of per-token frequency ranks).
+    Frequencies are counted over the whole corpus once and cached, so the
+    adversarial perturbation needs no model forward pass at all.
+    """
+    import numpy as np
+    from collections import Counter
+
+    key = tuple(texts)
+    if key in _ADV_FREQ_CACHE:
+        return _ADV_FREQ_CACHE[key]
+
+    encodings = tokenizer(texts, truncation=True, max_length=max_length, add_special_tokens=False)
+    all_ids = encodings['input_ids']
+    freq = Counter(tid for ids in all_ids for tid in ids)
+
+    ret = [(ids, np.array([freq[tid] for tid in ids], dtype=np.float32)) for ids in all_ids]
+    _ADV_FREQ_CACHE[key] = ret
+    return ret
+
+
+def adversarial_token_substitution(texts, perturb_pct, rng, tokenizer, model=None, max_length=128):
+    """
+    Adversarial token substitution (RQ4): targets the tokens that appear most
+    frequently in the corpus (function words like 'the' carry the most
+    probability mass) and replaces exactly that many tokens with random
+    vocabulary tokens.
+
+    This is the adversarial arm of the RQ4 experiment. Its control is the
+    existing 'token' perturbation: same percentage (same expected number of
+    replaced tokens, i.e. frequency-matched) but with positions chosen
+    uniformly at random. No model forward pass is required.
+    """
+    targets = _adv_targets(texts, rng, tokenizer, max_length=max_length)
+
+    ret = []
+    for ids, freq in targets:
+        n_tokens = len(ids)
+        n_to_replace = max(1, int(perturb_pct * n_tokens / 100))
+        n_to_replace = min(n_to_replace, n_tokens)
+        # Adversarial: replace the positions whose tokens are most frequent in
+        # the corpus. Ties are broken randomly (deterministically via rng).
+        positions = sorted(
+            range(n_tokens),
+            key=lambda j: (-freq[j], rng.random())
+        )[:n_to_replace]
+        pos_set = set(positions)
+        new_ids = [
+            rng.randint(0, tokenizer.vocab_size - 1) if j in pos_set else tid
+            for j, tid in enumerate(ids)
+        ]
         ret.append(tokenizer.decode(new_ids))
     return ret

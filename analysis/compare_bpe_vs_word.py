@@ -4,6 +4,10 @@ using CKA, TwoNN, MKNN, and other evaluation metrics.
 
 Usage: python compare_bpe_vs_word.py [--seed 1] [--debug]
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset

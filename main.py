@@ -24,9 +24,11 @@ def run(args):
     # Set up models
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
+    dtype = torch.float16 if MODEL_INFO[args.model]['dtype'] == 'fp16' else torch.float32
     model = AutoModelForCausalLM.from_pretrained(
       model_name, 
-      attn_implementation=MODEL_INFO[args.model]['attn_implementation']
+      attn_implementation=MODEL_INFO[args.model]['attn_implementation'],
+      dtype=dtype
     ).to(device)
 
     model.eval()
@@ -47,28 +49,27 @@ def run(args):
             'Hello world! Hello universe?'
         ]
     
-    BATCH_SIZE = args.batch_size if args.batch_size > 0 else (128 if torch.cuda.is_available() else 4)
-    
+    BATCH_SIZE = args.batch_size if args.batch_size > 0 else MODEL_INFO[args.model]['max_batch_size']
+
     ptb_type = args.ptb_type
 
     if args.ptb_pct != -1:
         ptb_pcts = [args.ptb_pct]
     else:
-        if ptb_type == 'shuffle':
-            ptb_pcts = [x*5 for x in range(1, 21)]
-        elif ptb_type == 'char':
+        if ptb_type == 'char':
             ptb_pcts = [x*5 for x in range(0, 11)] # baseline [hacky]
         else:
             ptb_pcts = [x*5 for x in range(1, 11)]
     
     for ptb_pct in ptb_pcts:
         
-        texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer)
+        texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer, model=model)
 
-        os.makedirs(f'results/{args.model}/{ptb_type}/{ptb_pct}', exist_ok=True)
+        os.makedirs(f'{args.out_root}/{args.model}/{ptb_type}/{ptb_pct}', exist_ok=True)
 
         try:
-            seen = set(pd.read_csv(f'results/{args.model}/{ptb_type}/{ptb_pct}/evals.csv')['sample'])
+            seen = set(pd.read_csv(f'{args.out_root}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv',
+                                   usecols=['sample'])['sample'])
         except:
             seen = set()
 
@@ -90,10 +91,10 @@ def run(args):
 
             res = res[~res['sample'].isin(seen)]
             if not args.debug:
-                res.to_csv(f'results/{args.model}/{ptb_type}/{ptb_pct}/evals.csv', 
-                                        mode='a', header=(i==0 and len(seen) == 0), index=False)
+                res.to_csv(f'{args.out_root}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv', 
+                                        mode='a', header=(i==0 and len(seen) == 0), index=False, float_format='%.6f')
             else:
-                res.to_csv(f'results/{args.model}/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False)
+                res.to_csv(f'{args.out_root}/{args.model}/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False, float_format='%.6f')
             
             del outputs, outputs_perturbed
     print(f"Total time taken: {time() - start_time:.2f} seconds")
@@ -107,7 +108,8 @@ if __name__ == "__main__":
     parser.add_argument("--ptb-pct", help="Percent of input text perturbed", type=int, default=-1)
     parser.add_argument("--seed", help="Random seed", type=int, default=1)
     parser.add_argument("--n-samples", help="Number of sequences to sample (-1 = use all)", type=int, default=-1)
-    parser.add_argument("--batch-size", help="Batch size (<=0 = auto: 128 GPU / 4 CPU)", type=int, default=0)
+    parser.add_argument("--batch-size", help="Batch size (<=0 = per-model max_batch_size)", type=int, default=0)
+    parser.add_argument("--out-root", help="Root directory for results (default: results)", type=str, default='results')
     parser.add_argument("--debug", action='store_true')
 
     args = parser.parse_args()

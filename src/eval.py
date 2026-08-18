@@ -22,7 +22,7 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
         seq_cols.update(activation_cka(outputs_base, outputs_perturb))
     seq_level = pd.DataFrame(seq_cols)
 
-    seq_level['sample'] = [x+i*4 for x in seq_level['sample']]
+    seq_level['sample'] = [x+i for x in seq_level['sample']]
 
     if output_only:
         tok_level = pd.DataFrame({
@@ -34,13 +34,15 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
             **get_sample_and_token_indices(inputs_base),
             **activation_similarity(outputs_base, outputs_perturb),
             **linear_cka(outputs_base, outputs_perturb),
-            **twoNN_intrinsic_dim(outputs_base, outputs_perturb),
-            **mknn_intrinsic_dim(outputs_base, outputs_perturb),
+            **intrinsic_dims(outputs_base, outputs_perturb),
             **attention_entropy(outputs_perturb),
             'logit_kl': logit_kl(outputs_base, outputs_perturb)
         })
-    tok_level['sample'] = [x + i*4 for x in tok_level['sample']]
-    return pd.merge(seq_level, tok_level, on='sample', how='inner')
+    tok_level['sample'] = [x + i for x in tok_level['sample']]
+    res = pd.merge(seq_level, tok_level, on='sample', how='inner')
+    for col in res.select_dtypes(include=['float64']).columns:
+        res[col] = res[col].astype('float32')
+    return res
 
 
 def get_sample_and_token_indices(inputs_base):
@@ -71,24 +73,6 @@ def nll(inputs, outputs):
     mask = (shift_labels != -100).float()
     seq_losses = (token_losses * mask).sum(dim=1) / mask.sum(dim=1)
     return seq_losses.tolist()
-
-
-def perplexity(inputs, outputs):
-    seq_losses = torch.tensor(nll(inputs, outputs))
-    return torch.exp(seq_losses).tolist()
-
-
-def next_token_accuracy(inputs, outputs):
-    input_ids = inputs.input_ids
-    attention_mask = inputs.attention_mask
-    labels = input_ids.clone()
-    labels[attention_mask == 0] = -100
-    shift_logits = outputs.logits[..., :-1, :].contiguous()
-    shift_labels = labels[..., 1:].contiguous()
-    preds = torch.argmax(shift_logits, dim=-1)
-    mask = (shift_labels != -100).float()
-    correct = ((preds == shift_labels).float() * mask).sum(dim=1)
-    return (correct / mask.sum(dim=1)).tolist()
 
 
 def output_divergence(outputs_base, outputs_perturb, tokenizer):
@@ -178,31 +162,118 @@ def activation_cka(outputs_base, outputs_perturb, k=DROP_K):
 
 
 def twoNN_intrinsic_dim(outputs_base, outputs_perturb, n_samples=500):
+    """TwoNN intrinsic dimensions (2NN block of intrinsic_dims).
+
+    Kept for backwards compatibility with analysis scripts; the eval loop calls
+    ``intrinsic_dims`` once so both estimators share one distance matrix.
+    """
+    return {k: v for k, v in intrinsic_dims(outputs_base, outputs_perturb, n_samples=n_samples).items()
+            if not k.startswith('intrinsic_dim_mknn')}
+
+
+def mknn_intrinsic_dim(outputs_base, outputs_perturb, n_samples=500):
+    """MKNN intrinsic dimensions (MKNN block of intrinsic_dims).
+
+    Kept for backwards compatibility with analysis scripts; the eval loop calls
+    ``intrinsic_dims`` once so both estimators share one distance matrix.
+    """
+    return {k: v for k, v in intrinsic_dims(outputs_base, outputs_perturb, n_samples=n_samples).items()
+            if k.startswith('intrinsic_dim_mknn')}
+
+
+def intrinsic_dims(outputs_base, outputs_perturb, n_samples=500):
+    """TwoNN and MKNN intrinsic dims (clean/perturbed/change per layer).
+
+    Both estimators share the same subsampled distance matrix per layer, so
+    the expensive O(n^2) pairwise-distance computation is done once per layer
+    instead of twice (one per estimator).
+    """
     base_hidden = outputs_base.hidden_states
     ptb_hidden = outputs_perturb.hidden_states
     batch_size, seq_len, _ = base_hidden[0].shape
     n_tokens_per_sample = seq_len - 1
     n_total_tokens = batch_size * n_tokens_per_sample
-    ret = {}
+    est = []
     for layer_idx in range(len(base_hidden)):
         base_h = base_hidden[layer_idx][:, :-1, :]
         ptb_h = ptb_hidden[layer_idx][:, :-1, :]
-        dim_clean = _estimate_intrinsic_dim(base_h, n_samples)
-        dim_perturbed = _estimate_intrinsic_dim(ptb_h, n_samples)
-        ret[f'intrinsic_dim_clean_layer_{layer_idx}'] = [dim_clean or 0.0] * n_total_tokens
-        ret[f'intrinsic_dim_perturbed_layer_{layer_idx}'] = [dim_perturbed or 0.0] * n_total_tokens
-        if dim_clean is not None and dim_perturbed is not None:
-            change = dim_perturbed - dim_clean
+        clean_2nn, clean_mknn = _estimate_dims_from_points(base_h, n_samples)
+        ptb_2nn, ptb_mknn = _estimate_dims_from_points(ptb_h, n_samples)
+        est.append((layer_idx, clean_2nn, ptb_2nn, clean_mknn, ptb_mknn))
+    ret = {}
+    for layer_idx, clean_2nn, ptb_2nn, _, _ in est:
+        ret[f'intrinsic_dim_clean_layer_{layer_idx}'] = [clean_2nn or 0.0] * n_total_tokens
+        ret[f'intrinsic_dim_perturbed_layer_{layer_idx}'] = [ptb_2nn or 0.0] * n_total_tokens
+        if clean_2nn is not None and ptb_2nn is not None:
+            change_2nn = ptb_2nn - clean_2nn
         else:
-            change = 0.0
-        ret[f'intrinsic_dim_change_layer_{layer_idx}'] = [change] * n_total_tokens
+            change_2nn = 0.0
+        ret[f'intrinsic_dim_change_layer_{layer_idx}'] = [change_2nn] * n_total_tokens
+    for layer_idx, _, _, clean_mknn, ptb_mknn in est:
+        ret[f'intrinsic_dim_mknn_clean_layer_{layer_idx}'] = [clean_mknn or 0.0] * n_total_tokens
+        ret[f'intrinsic_dim_mknn_perturbed_layer_{layer_idx}'] = [ptb_mknn or 0.0] * n_total_tokens
+        if clean_mknn is not None and ptb_mknn is not None:
+            change_mknn = ptb_mknn - clean_mknn
+        else:
+            change_mknn = 0.0
+        ret[f'intrinsic_dim_mknn_change_layer_{layer_idx}'] = [change_mknn] * n_total_tokens
     return ret
 
 
-def _estimate_intrinsic_dim(hidden_states, n_samples=500):
-    """2NN intrinsic dimension from a (n_batch, n_seq, d_model) hidden-state tensor."""
+def _estimate_dims_from_points(hidden_states, n_samples=500):
+    """(TwoNN, MKNN) intrinsic dims from a (n_batch, n_seq, d_model) tensor,
+    computing one shared distance matrix for both estimators."""
     points = hidden_states.reshape(-1, hidden_states.shape[-1]).float().cpu().numpy()
-    return estimate_intrinsic_dim_2nn(points, n_samples=n_samples, n_use=1000, seed=42)
+    return _estimate_dims_2nn_mknn(points, n_samples)
+
+
+def _estimate_dims_2nn_mknn(points, n_samples=500):
+    """(TwoNN, MKNN) intrinsic dimensions from an (N, D) point matrix.
+
+    Sub-samples down to ``n_samples`` points, computes the distance matrix
+    once, and derives both estimators from the same sorted neighbour
+    distances. Returns (None, None) when the estimate is degenerate.
+    """
+    points = np.asarray(points, dtype=np.float32)
+    n_total = points.shape[0]
+    if n_total < 10:
+        return None, None
+    if n_total > n_samples:
+        rng = np.random.RandomState(42)
+        idx = rng.choice(n_total, size=n_samples, replace=False)
+        points = points[idx]
+        n_total = n_samples
+    try:
+        n_use = min(n_total, 1000)
+        if n_use < n_total:
+            rng = np.random.RandomState(42)
+            idx = rng.choice(n_total, size=n_use, replace=False)
+            points = points[idx]
+        dist_matrix = squareform(pdist(points, metric='euclidean'))
+        np.fill_diagonal(dist_matrix, np.inf)
+        sorted_dists = np.sort(dist_matrix, axis=1)
+        r1 = sorted_dists[:, 0]
+        r2 = sorted_dists[:, 1]
+        valid = (r1 > 1e-10) & (r2 > 1e-10)
+        r1_v = r1[valid]
+        r2_v = r2[valid]
+        dim_2nn = None
+        if len(r1_v) >= 10:
+            mu = np.log(r2_v / r1_v)
+            denom = np.sum(mu)
+            if np.isfinite(denom) and denom > 1e-10:
+                dim_2nn = float(len(mu) / denom)
+        valid_mknn = r1 > 1e-10
+        r1_m = r1[valid_mknn]
+        dim_mknn = None
+        if len(r1_m) >= 10:
+            r_min = np.min(r1_m)
+            denom = np.sum(np.log(r1_m / r_min))
+            if np.isfinite(denom) and denom > 1e-10:
+                dim_mknn = float(len(r1_m) / denom)
+        return dim_2nn, dim_mknn
+    except Exception:
+        return None, None
 
 
 def estimate_intrinsic_dim_2nn(points, n_samples=500, n_use=1000, seed=42):
@@ -210,7 +281,7 @@ def estimate_intrinsic_dim_2nn(points, n_samples=500, n_use=1000, seed=42):
 
     Sub-samples down to `n_samples` points (if more are given), then estimates
     the 2NN intrinsic dimension on at most `n_use` points. Returns None when
-    there are too few valid points to estimate reliably.
+    there are too few valid points or the estimate is degenerate.
     """
     points = np.asarray(points, dtype=np.float32)
     n_total = points.shape[0]
@@ -241,42 +312,21 @@ def estimate_intrinsic_dim_2nn(points, n_samples=500, n_use=1000, seed=42):
         if len(r1) < 10:
             return None
         mu = np.log(r2 / r1)
-        intrinsic_dim = len(mu) / np.sum(mu)
-        return float(intrinsic_dim)
+        denom = np.sum(mu)
+        if not np.isfinite(denom) or denom <= 1e-10:
+            return None
+        return float(len(mu) / denom)
     except Exception as e:
         return None
 
 
-def mknn_intrinsic_dim(outputs_base, outputs_perturb, n_samples=500):
-    base_hidden = outputs_base.hidden_states
-    ptb_hidden = outputs_perturb.hidden_states
-    batch_size, seq_len, _ = base_hidden[0].shape
-    n_tokens_per_sample = seq_len - 1
-    n_total_tokens = batch_size * n_tokens_per_sample
-    ret = {}
-    for layer_idx in range(len(base_hidden)):
-        base_h = base_hidden[layer_idx][:, :-1, :]
-        ptb_h = ptb_hidden[layer_idx][:, :-1, :]
-        dim_clean = _estimate_mknn_dim(base_h, n_samples)
-        dim_perturbed = _estimate_mknn_dim(ptb_h, n_samples)
-        ret[f'intrinsic_dim_mknn_clean_layer_{layer_idx}'] = [dim_clean or 0.0] * n_total_tokens
-        ret[f'intrinsic_dim_mknn_perturbed_layer_{layer_idx}'] = [dim_perturbed or 0.0] * n_total_tokens
-        if dim_clean is not None and dim_perturbed is not None:
-            change = dim_perturbed - dim_clean
-        else:
-            change = 0.0
-        ret[f'intrinsic_dim_mknn_change_layer_{layer_idx}'] = [change] * n_total_tokens
-    return ret
-
-
-def _estimate_mknn_dim(hidden_states, n_samples=500):
-    """Maximum-Likelihood / MKNN intrinsic dimension from a hidden-state tensor."""
-    points = hidden_states.reshape(-1, hidden_states.shape[-1]).float().cpu().numpy()
-    return estimate_intrinsic_dim_mknn(points, n_samples=n_samples, n_use=1000, seed=42)
-
-
 def estimate_intrinsic_dim_mknn(points, n_samples=500, n_use=1000, seed=42):
-    """Maximum-likelihood intrinsic dimension (MKNN) from an (N, D) point matrix."""
+    """Maximum-likelihood intrinsic dimension (MKNN) from an (N, D) point matrix.
+
+    Sub-samples down to `n_samples` points (if more are given), then estimates
+    the MKNN intrinsic dimension on at most `n_use` points. Returns None when
+    there are too few valid points or the estimate is degenerate.
+    """
     points = np.asarray(points, dtype=np.float32)
     n_total = points.shape[0]
     if n_total < 10:
@@ -304,23 +354,32 @@ def estimate_intrinsic_dim_mknn(points, n_samples=500, n_use=1000, seed=42):
         if len(r1) < 10:
             return None
         r_min = np.min(r1)
-        intrinsic_dim = len(r1) / np.sum(np.log(r1 / r_min))
-        return float(intrinsic_dim)
+        denom = np.sum(np.log(r1 / r_min))
+        if not np.isfinite(denom) or denom <= 1e-10:
+            return None
+        return float(len(r1) / denom)
     except Exception as e:
         return None
 
 
 def attention_entropy(outputs):
+    """Per-layer attention entropy, mean over heads (one column per layer).
+
+    Previously one column per (layer, head) was written, which produced
+    1200 near-constant columns for gpt2-xl (48 layers x 25 heads) and made
+    every evals.csv ~370 MB. The per-layer mean carries the same signal
+    for layer-depth analysis at ~4% of the columns.
+    """
     attentions = outputs.attentions
-    _, nh, _, _ = attentions[0].shape
     ret = {}
     for i in range(len(attentions)):
-        for h in range(nh):
-            head_att = attentions[i][:, h, :-1, :]
-            seq_len = head_att.shape[-1]
-            mask = head_att > 0
-            safe_att = head_att.clamp(min=1e-9)
-            ent = -torch.sum(mask * head_att * torch.log(safe_att), dim=-1)
-            max_ent = torch.log(torch.tensor(float(seq_len)))
-            ret[f'attn_layer{i}_head_{h}_entropy_norm'] = (ent / max_ent).flatten().tolist()
+        layer_att = attentions[i].float()  # fp16 clamp(log) underflows to NaN; compute in fp32
+        _, nh, seq_len, _ = layer_att.shape
+        head_att = layer_att[:, :, :-1, :]
+        mask = head_att > 0
+        safe_att = head_att.clamp(min=1e-9)
+        ent = -torch.sum(mask * head_att * torch.log(safe_att), dim=-1)
+        max_ent = torch.log(torch.tensor(float(seq_len)))
+        ent_norm = (ent / max_ent).mean(dim=1)  # mean over heads
+        ret[f'attn_entropy_layer_{i}'] = ent_norm.flatten().tolist()
     return ret

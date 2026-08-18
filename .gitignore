@@ -1,6 +1,7 @@
-draft.ipynb
+*.ipynb
 */__pycache__
 results*
 .DS_Store
 __pycache__
 figures/
+myenv

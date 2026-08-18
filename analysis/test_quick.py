@@ -4,6 +4,10 @@ Tests on minimal data to verify no errors before full runs.
 
 Usage: python test_quick.py
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
