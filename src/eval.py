@@ -15,7 +15,6 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
     seq_cols = {
         'sample': [x for x in range(outputs_base.logits.shape[0])],
         'nll': nll(inputs_perturb, outputs_perturb),
-        'nll_base': nll(inputs_base, outputs_base),
         'output_divergence': output_divergence(outputs_base, outputs_perturb, tokenizer),
     }
     if not output_only:
