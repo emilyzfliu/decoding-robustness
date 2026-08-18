@@ -24,5 +24,11 @@ python -m kaggle kernels push -p .\split-b -t 21600
 first perturbation is still running. Use separate accounts when the account
 session limit is unknown.
 
+Each retry removes the previous completion marker and clears both the kernel
+and child-driver logs before starting. Existing evaluation files under
+`results_v2/` are preserved so interrupted runs can resume. A child-driver
+failure prevents `run_complete.json` from being written and causes the kernel
+to fail; inspect `five_model_run.log` and `results_v2/run_cross_model.log`.
+
 Do not commit Kaggle credentials, downloaded outputs, or generated `results_v2`
 directories. Fetch output only after Kaggle reports `COMPLETE`.
