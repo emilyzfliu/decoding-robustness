@@ -2,7 +2,6 @@
 Compute ALL evaluation metrics.
 """
 
-
 import torch
 import Levenshtein
 import pandas as pd
@@ -11,7 +10,8 @@ from scipy.stats import entropy
 from scipy.spatial.distance import pdist, squareform
 
 
-def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokenizer, i, output_only=False):
+# Computes core evaluation metrics only for perturbation-trend and cross model experiments.
+def eval_loop(outputs_base, inputs_perturb, outputs_perturb, tokenizer, i, output_only=False):
     seq_cols = {
         'sample': [x for x in range(outputs_base.logits.shape[0])],
         'nll': nll(inputs_perturb, outputs_perturb),
@@ -19,30 +19,10 @@ def eval_loop(inputs_base, outputs_base, inputs_perturb, outputs_perturb, tokeni
     }
     if not output_only:
         seq_cols.update(activation_cka(outputs_base, outputs_perturb))
-    seq_level = pd.DataFrame(seq_cols)
+        seq_cols.update(intrinsic_dims(outputs_base, outputs_perturb))
 
-    seq_level['sample'] = [x+i for x in seq_level['sample']]
-
-    if output_only:
-        tok_level = pd.DataFrame({
-            **get_sample_and_token_indices(inputs_base),
-            'logit_kl': logit_kl(outputs_base, outputs_perturb)
-        })
-    else:
-        tok_level = pd.DataFrame({
-            **get_sample_and_token_indices(inputs_base),
-            **activation_similarity(outputs_base, outputs_perturb),
-            **linear_cka(outputs_base, outputs_perturb),
-            **intrinsic_dims(outputs_base, outputs_perturb),
-            **attention_entropy(outputs_perturb),
-            'logit_kl': logit_kl(outputs_base, outputs_perturb)
-        })
-    tok_level['sample'] = [x + i for x in tok_level['sample']]
-    res = pd.merge(seq_level, tok_level, on='sample', how='inner')
-    for col in res.select_dtypes(include=['float64']).columns:
-        res[col] = res[col].astype('float32')
+    res = pd.DataFrame(seq_cols)
     return res
-
 
 def get_sample_and_token_indices(inputs_base):
     n_samples, sample_length = inputs_base.input_ids.shape
@@ -135,11 +115,6 @@ def linear_cka(outputs_base, outputs_perturb, k=DROP_K):
             Y = ptb_hidden[L][b, :-1, :].float()
             Xs, Ys = _drop_top_var_dims(X, Y, k)
             cka_vals.append(_linear_cka(Xs, Ys))
-        # Broadcast per-sample CKA to per-token positions
-        broadcast = []
-        for b in range(n_samples):
-            broadcast.extend([cka_vals[b]] * seq_len)
-        ret[f'cka_layer_{L}'] = broadcast
     return ret
 
 
@@ -190,8 +165,8 @@ def intrinsic_dims(outputs_base, outputs_perturb, n_samples=500):
     base_hidden = outputs_base.hidden_states
     ptb_hidden = outputs_perturb.hidden_states
     batch_size, seq_len, _ = base_hidden[0].shape
-    n_tokens_per_sample = seq_len - 1
-    n_total_tokens = batch_size * n_tokens_per_sample
+    # n_tokens_per_sample = seq_len - 1
+    # n_total_tokens = batch_size * n_tokens_per_sample
     est = []
     for layer_idx in range(len(base_hidden)):
         base_h = base_hidden[layer_idx][:, :-1, :]
@@ -201,79 +176,77 @@ def intrinsic_dims(outputs_base, outputs_perturb, n_samples=500):
         est.append((layer_idx, clean_2nn, ptb_2nn, clean_mknn, ptb_mknn))
     ret = {}
     for layer_idx, clean_2nn, ptb_2nn, _, _ in est:
-        ret[f'intrinsic_dim_clean_layer_{layer_idx}'] = [clean_2nn or 0.0] * n_total_tokens
-        ret[f'intrinsic_dim_perturbed_layer_{layer_idx}'] = [ptb_2nn or 0.0] * n_total_tokens
+        ret[f'intrinsic_dim_clean_layer_{layer_idx}'] = [clean_2nn or 0.0] * batch_size
+        ret[f'intrinsic_dim_perturbed_layer_{layer_idx}'] = [ptb_2nn or 0.0] * batch_size
         if clean_2nn is not None and ptb_2nn is not None:
             change_2nn = ptb_2nn - clean_2nn
         else:
             change_2nn = 0.0
-        ret[f'intrinsic_dim_change_layer_{layer_idx}'] = [change_2nn] * n_total_tokens
+        ret[f'intrinsic_dim_change_layer_{layer_idx}'] = [change_2nn]
     for layer_idx, _, _, clean_mknn, ptb_mknn in est:
-        ret[f'intrinsic_dim_mknn_clean_layer_{layer_idx}'] = [clean_mknn or 0.0] * n_total_tokens
-        ret[f'intrinsic_dim_mknn_perturbed_layer_{layer_idx}'] = [ptb_mknn or 0.0] * n_total_tokens
+        ret[f'intrinsic_dim_mknn_clean_layer_{layer_idx}'] = [clean_mknn or 0.0] * batch_size
+        ret[f'intrinsic_dim_mknn_perturbed_layer_{layer_idx}'] = [ptb_mknn or 0.0] * batch_size
         if clean_mknn is not None and ptb_mknn is not None:
             change_mknn = ptb_mknn - clean_mknn
         else:
             change_mknn = 0.0
-        ret[f'intrinsic_dim_mknn_change_layer_{layer_idx}'] = [change_mknn] * n_total_tokens
+        ret[f'intrinsic_dim_mknn_change_layer_{layer_idx}'] = [change_mknn] * batch_size
     return ret
 
 
 def _estimate_dims_from_points(hidden_states, n_samples=500):
     """(TwoNN, MKNN) intrinsic dims from a (n_batch, n_seq, d_model) tensor,
     computing one shared distance matrix for both estimators."""
-    points = hidden_states.reshape(-1, hidden_states.shape[-1]).float().cpu().numpy()
+    points = hidden_states.reshape(-1, hidden_states.shape[-1]).float()
     return _estimate_dims_2nn_mknn(points, n_samples)
 
 
-def _estimate_dims_2nn_mknn(points, n_samples=500):
-    """(TwoNN, MKNN) intrinsic dimensions from an (N, D) point matrix.
+def _estimate_dims_2nn_mknn(points, n_samples=500, seed=42):
+    """
+    (TwoNN, MKNN) intrinsic dimensions from an (N, D) point matrix.
 
     Sub-samples down to ``n_samples`` points, computes the distance matrix
     once, and derives both estimators from the same sorted neighbour
     distances. Returns (None, None) when the estimate is degenerate.
+
+    points: (N, D) tensor on GPU, already detached and float32.
     """
-    points = np.asarray(points, dtype=np.float32)
     n_total = points.shape[0]
     if n_total < 10:
         return None, None
+
     if n_total > n_samples:
-        rng = np.random.RandomState(42)
-        idx = rng.choice(n_total, size=n_samples, replace=False)
-        points = points[idx]
-        n_total = n_samples
-    try:
-        n_use = min(n_total, 1000)
-        if n_use < n_total:
-            rng = np.random.RandomState(42)
-            idx = rng.choice(n_total, size=n_use, replace=False)
-            points = points[idx]
-        dist_matrix = squareform(pdist(points, metric='euclidean'))
-        np.fill_diagonal(dist_matrix, np.inf)
-        sorted_dists = np.sort(dist_matrix, axis=1)
-        r1 = sorted_dists[:, 0]
-        r2 = sorted_dists[:, 1]
+        g = torch.Generator(device=points.device).manual_seed(seed)
+        rand_indices = torch.randperm(n_total, generator=g, device=points.device)[:n_samples]
+        points = points[rand_indices]
+
+    with torch.no_grad():
+        dists = torch.cdist(points, points)
+        torch.diagonal(dists).fill_(float('inf'))
+
+        values, _ = torch.topk(dists, k=2, largest=False, dim=1)
+        r1 = values[:, 0]
+        r2 = values[:, 1]
+
         valid = (r1 > 1e-10) & (r2 > 1e-10)
-        r1_v = r1[valid]
-        r2_v = r2[valid]
+        r1_v, r2_v = r1[valid], r2[valid]
         dim_2nn = None
         if len(r1_v) >= 10:
-            mu = np.log(r2_v / r1_v)
-            denom = np.sum(mu)
-            if np.isfinite(denom) and denom > 1e-10:
+            mu = torch.log(r2_v / r1_v)
+            denom = torch.sum(mu)
+            if torch.isfinite(denom) and denom > 1e-10:
                 dim_2nn = float(len(mu) / denom)
+
         valid_mknn = r1 > 1e-10
         r1_m = r1[valid_mknn]
         dim_mknn = None
         if len(r1_m) >= 10:
-            r_min = np.min(r1_m)
-            denom = np.sum(np.log(r1_m / r_min))
-            if np.isfinite(denom) and denom > 1e-10:
+            r_min = torch.min(r1_m)
+            denom = torch.sum(torch.log(r1_m / r_min))
+            if torch.isfinite(denom) and denom > 1e-10:
                 dim_mknn = float(len(r1_m) / denom)
-        return dim_2nn, dim_mknn
-    except Exception:
-        return None, None
 
+    return dim_2nn, dim_mknn
 
 def estimate_intrinsic_dim_2nn(points, n_samples=500, n_use=1000, seed=42):
     """Two-Nearest-Neighbours intrinsic dimension from an (N, D) point matrix.
