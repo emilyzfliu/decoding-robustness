@@ -87,7 +87,7 @@ def run(args):
                 outputs = model(**inputs, output_hidden_states= eval_hidden, output_attentions=eval_hidden)
                 outputs_perturbed = model(**inputs_perturbed, output_hidden_states=eval_hidden, output_attentions=eval_hidden)
             
-            res = eval_loop(inputs, outputs, inputs_perturbed, outputs_perturbed, tokenizer, i, output_only=(not eval_hidden))
+            res = eval_loop(outputs, inputs_perturbed, outputs_perturbed, tokenizer, i, output_only=(not eval_hidden))
 
             res = res[~res['sample'].isin(seen)]
             if not args.debug:
