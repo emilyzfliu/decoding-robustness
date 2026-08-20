@@ -333,25 +333,3 @@ def estimate_intrinsic_dim_mknn(points, n_samples=500, n_use=1000, seed=42):
     except Exception as e:
         return None
 
-
-def attention_entropy(outputs):
-    """Per-layer attention entropy, mean over heads (one column per layer).
-
-    Previously one column per (layer, head) was written, which produced
-    1200 near-constant columns for gpt2-xl (48 layers x 25 heads) and made
-    every evals.csv ~370 MB. The per-layer mean carries the same signal
-    for layer-depth analysis at ~4% of the columns.
-    """
-    attentions = outputs.attentions
-    ret = {}
-    for i in range(len(attentions)):
-        layer_att = attentions[i].float()  # fp16 clamp(log) underflows to NaN; compute in fp32
-        _, nh, seq_len, _ = layer_att.shape
-        head_att = layer_att[:, :, :-1, :]
-        mask = head_att > 0
-        safe_att = head_att.clamp(min=1e-9)
-        ent = -torch.sum(mask * head_att * torch.log(safe_att), dim=-1)
-        max_ent = torch.log(torch.tensor(float(seq_len)))
-        ent_norm = (ent / max_ent).mean(dim=1)  # mean over heads
-        ret[f'attn_entropy_layer_{i}'] = ent_norm.flatten().tolist()
-    return ret
