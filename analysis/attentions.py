@@ -269,7 +269,7 @@ def run(args):
         
     texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer, model=model)
 
-    out_dir = f'{args.out_root}/{args.model}/{ptb_type}/{ptb_pct}'
+    out_dir = f'{args.out_root}/{args.model}_{ptb_type}_{ptb_pct}'
 
     os.makedirs(out_dir, exist_ok=True)
 
@@ -328,11 +328,12 @@ def run(args):
             n_total = len(length_matched)
 
             if n_matched == 0:
-                print(f"WARNING: batch {i//BATCH_SIZE}: 0/{n_total} matched — skipping activation_patch entirely")
+                # print(f"WARNING: batch {i//BATCH_SIZE}: 0/{n_total} matched — skipping activation_patch entirely")
+                pass
             else:
-                if n_matched < n_total:
-                    print(f"WARNING: batch {i//BATCH_SIZE}: {n_total - n_matched}/{n_total} mismatched — "
-                        f"subsetting activation_patch to {n_matched} matched examples")
+                # if n_matched < n_total:
+                #     print(f"WARNING: batch {i//BATCH_SIZE}: {n_total - n_matched}/{n_total} mismatched — "
+                #         f"subsetting activation_patch to {n_matched} matched examples")
 
                 idx = length_matched.nonzero(as_tuple=True)[0]
 
@@ -366,7 +367,7 @@ def run(args):
         del outputs, outputs_perturbed
 
     final_df = pd.concat(all_batches, ignore_index=True)
-    final_df.to_csv(f'{out_dir}/attention_results.csv', index=False)
+    final_df.to_csv(f'{out_dir}_attention_results.csv', index=False)
     print(f"Total time taken: {time() - start_time:.2f} seconds")
 
 if __name__ == "__main__":
