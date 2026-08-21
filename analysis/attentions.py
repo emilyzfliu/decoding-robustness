@@ -241,8 +241,7 @@ def run(args):
     dtype = torch.float16 if MODEL_INFO[args.model]['dtype'] == 'fp16' else torch.float32
     model = AutoModelForCausalLM.from_pretrained(
       model_name, 
-      attn_implementation=MODEL_INFO[args.model]['attn_implementation'],
-      dtype=dtype
+      attn_implementation=MODEL_INFO[args.model]['attn_implementation']
     ).to(device)
 
     model.eval()
