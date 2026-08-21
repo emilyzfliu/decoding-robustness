@@ -324,13 +324,33 @@ def run(args):
             ptb_len = inputs_perturbed['attention_mask'].sum(dim=1)
             length_matched = (clean_len == ptb_len)
 
-            if not length_matched.all():
-                n_mismatched = (~length_matched).sum().item()
-                print(f"WARNING: {n_mismatched}/{len(length_matched)} examples in batch "
-                    f"have mismatched clean/perturbed length despite ptb_type={ptb_type} — "
-                    f"skipping activation_patch for this batch")
+            n_matched = length_matched.sum().item()
+            n_total = len(length_matched)
+
+            if n_matched == 0:
+                print(f"WARNING: batch {i//BATCH_SIZE}: 0/{n_total} matched — skipping activation_patch entirely")
             else:
-                patched = activation_patch(model, tokenizer, clean_cache, inputs, outputs, inputs_perturbed, outputs_perturbed)
+                if n_matched < n_total:
+                    print(f"WARNING: batch {i//BATCH_SIZE}: {n_total - n_matched}/{n_total} mismatched — "
+                        f"subsetting activation_patch to {n_matched} matched examples")
+
+                idx = length_matched.nonzero(as_tuple=True)[0]
+
+                from transformers import BatchEncoding
+                inputs_sub = BatchEncoding({k: v[idx] for k, v in inputs.items()})
+                inputs_perturbed_sub = BatchEncoding({k: v[idx] for k, v in inputs_perturbed.items()})
+
+                clean_cache_sub = {layer_idx: v[idx] for layer_idx, v in clean_cache.items()}
+
+                from types import SimpleNamespace
+                outputs_sub = SimpleNamespace(logits=outputs.logits[idx])
+                outputs_perturbed_sub = SimpleNamespace(logits=outputs_perturbed.logits[idx])
+
+                patched = activation_patch(
+                    model, tokenizer, clean_cache_sub,
+                    inputs_sub, outputs_sub,
+                    inputs_perturbed_sub, outputs_perturbed_sub
+                )
                 dfs.append(patched)
 
         pts_og = previous_token_score(outputs.attentions, inputs['attention_mask'])
