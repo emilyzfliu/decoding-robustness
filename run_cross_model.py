@@ -27,7 +27,7 @@ PCTS = [x * 5 for x in range(1, 11)]
 GRID_PCTS = {'char': [0] + PCTS, 'shuffle': PCTS, 'token': PCTS,
              'word': PCTS, 'typo': PCTS, 'synonym': PCTS, 'adv': PCTS}
 N_SAMPLES = 300
-TARGET_ROWS = N_SAMPLES * 127  # 300 sequences x 127 token positions
+# TARGET_ROWS = N_SAMPLES * 127  # 300 sequences x 127 token positions
 
 
 def model_dir_complete(out_root, model, ptb_type, n_samples=N_SAMPLES):
@@ -38,7 +38,7 @@ def model_dir_complete(out_root, model, ptb_type, n_samples=N_SAMPLES):
             return False
         with open(path) as f:
             n_rows = sum(1 for _ in f) - 1
-        if n_rows < n_samples * 127:
+        if n_rows < n_samples:
             return False
     return True
 

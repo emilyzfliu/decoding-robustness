@@ -16,6 +16,7 @@ def eval_loop(outputs_base, inputs_perturb, outputs_perturb, tokenizer, i, outpu
         'sample': [x for x in range(outputs_base.logits.shape[0])],
         'nll': nll(inputs_perturb, outputs_perturb),
         'output_divergence': output_divergence(outputs_base, outputs_perturb, tokenizer),
+        'last_token_kl': logit_kl(outputs_base, outputs_perturb)
     }
     if not output_only:
         seq_cols.update(activation_cka(outputs_base, outputs_perturb))
@@ -61,14 +62,13 @@ def output_divergence(outputs_base, outputs_perturb, tokenizer):
 
 
 def logit_kl(outputs_base, outputs_perturb):
-    logits_base = outputs_base.logits[:, :-1, :]
-    logits_ptb = outputs_perturb.logits[:, :-1, :]
+    logits_base = outputs_base.logits[:, -1, :]
+    logits_ptb = outputs_perturb.logits[:, -1, :]
     log_probs_base = torch.nn.functional.log_softmax(logits_base, dim=-1)
     probs_base = log_probs_base.exp()
     log_probs_ptb = torch.nn.functional.log_softmax(logits_ptb, dim=-1)
     kl = torch.sum(probs_base * (log_probs_base - log_probs_ptb), dim=-1)
     return kl.flatten().tolist()
-
 
 def activation_similarity(outputs_base, outputs_perturb):
     base_hidden = outputs_base.hidden_states
