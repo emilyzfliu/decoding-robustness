@@ -23,11 +23,6 @@ def eval_loop(outputs_base, inputs_perturb, outputs_perturb, tokenizer, i, outpu
         seq_cols.update(activation_cka(outputs_base, outputs_perturb))
         seq_cols.update(intrinsic_dims(outputs_base, outputs_perturb))
 
-
-    for key in seq_cols:
-        print(key)
-        print(len(seq_cols[key]))
-
     res = pd.DataFrame(seq_cols)
     return res
 
@@ -188,7 +183,7 @@ def intrinsic_dims(outputs_base, outputs_perturb, n_samples=500):
             change_2nn = ptb_2nn - clean_2nn
         else:
             change_2nn = 0.0
-        ret[f'intrinsic_dim_change_layer_{layer_idx}'] = [change_2nn]
+        ret[f'intrinsic_dim_change_layer_{layer_idx}'] = [change_2nn] * batch_size
     for layer_idx, _, _, clean_mknn, ptb_mknn in est:
         ret[f'intrinsic_dim_mknn_clean_layer_{layer_idx}'] = [clean_mknn or 0.0] * batch_size
         ret[f'intrinsic_dim_mknn_perturbed_layer_{layer_idx}'] = [ptb_mknn or 0.0] * batch_size
