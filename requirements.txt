@@ -5,3 +5,4 @@ numpy
 scipy
 nltk
 python-Levenshtein
+hf_transfer
