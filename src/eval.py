@@ -18,9 +18,15 @@ def eval_loop(outputs_base, inputs_perturb, outputs_perturb, tokenizer, i, outpu
         'output_divergence': output_divergence(outputs_base, outputs_perturb, tokenizer),
         'last_token_kl': logit_kl(outputs_base, outputs_perturb)
     }
+
     if not output_only:
         seq_cols.update(activation_cka(outputs_base, outputs_perturb))
         seq_cols.update(intrinsic_dims(outputs_base, outputs_perturb))
+
+
+    for key in seq_cols:
+        print(key)
+        print(len(seq_cols[key]))
 
     res = pd.DataFrame(seq_cols)
     return res

@@ -78,7 +78,12 @@ def main():
     args = parser.parse_args()
 
     os.makedirs(args.out_root, exist_ok=True)
+
     log_path = os.path.join(args.out_root, 'run_cross_model.log')
+
+    if args.force and os.path.exists(log_path): # clear old logs
+        os.remove(log_path)
+
     models = [m.strip() for m in args.models.split(',') if m.strip()]
     ptb_types = [t.strip() for t in args.ptb_types.split(',') if t.strip()]
 
