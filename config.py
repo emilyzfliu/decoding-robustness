@@ -46,7 +46,7 @@ MODEL_INFO = {
         'attn_implementation': 'eager',
         'eval_hidden_states': True,
         'max_batch_size': 2,
-        'dtype': 'fp16'},
+        'dtype': 'bf16'},
     # Current 3b has bug
     'qwen2.5_3b': {
         'model_name': 'Qwen/Qwen2.5-3B',
