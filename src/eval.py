@@ -75,6 +75,23 @@ def nll(inputs, outputs):
     return seq_losses.tolist()
 
 
+def perplexity(inputs, outputs):
+    return [float(np.exp(x)) for x in nll(inputs, outputs)]
+
+
+def next_token_accuracy(inputs, outputs):
+    input_ids = inputs.input_ids
+    attention_mask = inputs.attention_mask
+    labels = input_ids.clone()
+    labels[attention_mask == 0] = -100
+    preds = torch.argmax(outputs.logits[..., :-1, :], dim=-1)
+    shift_labels = labels[..., 1:]
+    correct = (preds == shift_labels).float()
+    mask = (shift_labels != -100).float()
+    seq_acc = (correct * mask).sum(dim=1) / mask.sum(dim=1)
+    return seq_acc.tolist()
+
+
 def output_divergence(outputs_base, outputs_perturb, tokenizer):
     text_base_out = tokenizer.batch_decode(torch.argmax(outputs_base.logits[:, :-1, :], dim=-1).cpu())
     text_ptb_out = tokenizer.batch_decode(torch.argmax(outputs_perturb.logits[:, :-1, :], dim=-1).cpu())
