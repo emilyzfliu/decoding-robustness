@@ -296,7 +296,7 @@ def run(args):
         inputs_perturbed = tokenizer(batch_texts_perturbed, return_tensors="pt",
                                     truncation=True, max_length=128, padding='max_length').to(device)
 
-        if ptb_type in ['token', 'shuffle', 'adv']:
+        if ptb_type in ['token', 'shuffle', 'adv', 'word', 'synonym']:
             clean_cache, clean_cache_handle = capture_clean_cache(model)
         else:
             clean_cache, clean_cache_handle = None, []
