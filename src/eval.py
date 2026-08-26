@@ -24,6 +24,7 @@ def eval_loop(outputs_base, inputs_perturb, outputs_perturb, tokenizer, i, outpu
         seq_cols.update(intrinsic_dims(outputs_base, outputs_perturb))
 
     res = pd.DataFrame(seq_cols)
+    res['sample'] = [x+i for x in res['sample']]
     return res
 
 def get_sample_and_token_indices(inputs_base):
