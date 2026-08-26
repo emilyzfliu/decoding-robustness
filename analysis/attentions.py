@@ -319,7 +319,7 @@ def run(args):
 
         dfs.append(entropy)
 
-        if ptb_type in ['token', 'shuffle', 'adv']:
+        if ptb_type in ['token', 'shuffle', 'adv', 'word', 'synonym']:
             clean_len = inputs['attention_mask'].sum(dim=1)
             ptb_len = inputs_perturbed['attention_mask'].sum(dim=1)
             length_matched = (clean_len == ptb_len)
