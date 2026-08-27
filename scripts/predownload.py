@@ -18,7 +18,7 @@ def main():
         AutoTokenizer.from_pretrained(name)
         AutoModelForCausalLM.from_pretrained(
             name, attn_implementation='eager',
-            dtype='float16' if MODEL_INFO[key]['dtype'] == 'fp16' else 'float32')
+            torch_dtype='float16' if MODEL_INFO[key]['dtype'] == 'fp16' else 'float32')
         print(f'  done {key}', flush=True)
 
 

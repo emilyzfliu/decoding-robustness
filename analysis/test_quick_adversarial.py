@@ -41,7 +41,7 @@ def test_context_insertion(model, tokenizer):
     rng = random.Random(1)
     device = torch.device("cpu")
 
-    for condition in ['topic_shift', 'misleading_claim', 'adversarial']:
+    for condition in ['topic_shift', 'misleading_claim', 'random_insertion', 'adversarial']:
         try:
             result = context_insertion(
                 TEXTS, condition, rng, tokenizer, model=model, device=device,
@@ -66,7 +66,7 @@ def test_question_perturbation(model, tokenizer):
     device = torch.device("cpu")
     contexts = [' '.join(t.split()[:-1]) for t in TEXTS]
 
-    for condition in ['synonym', 'reorder', 'negation_paraphrase', 'adversarial_swap']:
+    for condition in ['synonym', 'reorder', 'negation_paraphrase', 'random_swap', 'adversarial_swap']:
         try:
             result = question_perturbation(
                 contexts, condition, rng, tokenizer, model=model, device=device, max_length=32,

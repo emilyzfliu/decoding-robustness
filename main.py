@@ -28,7 +28,7 @@ def run(args):
     model = AutoModelForCausalLM.from_pretrained(
       model_name, 
       attn_implementation=MODEL_INFO[args.model]['attn_implementation'],
-      dtype=dtype
+      torch_dtype=dtype
     ).to(device)
 
     model.eval()
@@ -63,7 +63,7 @@ def run(args):
     
     for ptb_pct in ptb_pcts:
         
-        texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer, model=model)
+        texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer, model=model, device=device)
 
         os.makedirs(f'{args.out_root}/{args.model}/{ptb_type}/{ptb_pct}', exist_ok=True)
 

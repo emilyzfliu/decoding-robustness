@@ -23,7 +23,7 @@ def probe(model_key, batch_size=2, seq_len=128):
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = 'left'
     model = AutoModelForCausalLM.from_pretrained(
-        info['model_name'], attn_implementation='eager', dtype=dtype).to(device)
+        info['model_name'], attn_implementation='eager', torch_dtype=dtype).to(device)
     model.eval()
     load_s = time.time() - t0
 

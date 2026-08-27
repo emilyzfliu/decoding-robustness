@@ -4,12 +4,17 @@ Companion notes for `adversarial_eval.py` and `src/adversarial_perturbs.py`.
 
 ## Context Insertion
 
-Conditions: `clean`, `topic_shift`, `misleading_claim`, `adversarial`.
+Conditions: `clean`, `topic_shift`, `misleading_claim`, `random_insertion`, `adversarial`.
 
 - `topic_shift` splices in a sentence sampled from a different, unrelated passage.
 - `misleading_claim` corrupts the passage itself (mutates a year/number, or swaps
   two proper-noun-like tokens, or as a last resort negates a copula/aux verb) —
   no external claim bank or NER model is used.
+- `random_insertion` splices a span of the same length, at the same midpoint
+  position, as `adversarial` — but the inserted tokens are sampled uniformly at
+  random instead of gradient-optimized. Matched control for `adversarial`: any
+  gap between the two isolates the effect of gradient-guided token choice from
+  the mere presence of an out-of-distribution span at that location.
 - `adversarial` splices a placeholder span into the passage and optimizes it with
   a HotFlip-style gradient-guided attack (`src/hotflip.py`) to maximize the
   model's own NLL on the resulting sequence.
@@ -22,12 +27,16 @@ which is what this experiment is designed to measure.
 
 ## Question-Level Perturbations
 
-Conditions: `clean`, `synonym`, `reorder`, `negation_paraphrase`, `adversarial_swap`.
+Conditions: `clean`, `synonym`, `reorder`, `negation_paraphrase`, `random_swap`, `adversarial_swap`.
 
 Task: split each passage into `context` (all but the last word) and a held-out
 `target_word`. Feed the (possibly perturbed) context to the model, greedily
 generate a few tokens, and score a match via **loose substring search** for
 `target_word` in the generated continuation.
+
+`random_swap` is the matched control for `adversarial_swap`: it edits the same
+number of context positions (same shuffled-order budget HotFlip uses), but each
+replacement token is sampled uniformly at random rather than gradient-selected.
 
 **Task/metric mismatch caveat (important):** `adversarial_swap` optimizes the
 whole-sequence NLL of the context — it has no notion of the held-out target

@@ -5,6 +5,13 @@ need the model itself (for gradient-guided attacks via src/hotflip.py), unlike
 the existing char/token/word/shuffle/typo perturbations which only need text
 + tokenizer.
 
+Each adversarial condition ('adversarial', 'adversarial_swap') has a matched
+uniform-random control ('random_insertion', 'random_swap' respectively) that
+edits the same span/positions and edit budget but with randomly-sampled
+replacement tokens instead of gradient-guided ones — isolating whether
+adversarial optimization matters beyond just introducing out-of-distribution
+tokens at that location.
+
 Public entry points: `context_insertion`, `question_perturbation`.
 """
 import re
@@ -26,10 +33,15 @@ def context_insertion(texts, condition, rng, tokenizer, model=None, device=None,
         return _topic_shift(texts, rng, distractor_pool)
     elif condition == 'misleading_claim':
         return _misleading_claim(texts, rng)
+    elif condition == 'random_insertion':
+        return _random_insertion(texts, rng, tokenizer, insertion_len, max_length)
     elif condition == 'adversarial':
         return _adversarial_insertion(texts, rng, tokenizer, model, device, insertion_len, n_iters, max_length)
     else:
-        raise ValueError("condition must be one of ['clean', 'topic_shift', 'misleading_claim', 'adversarial']")
+        raise ValueError(
+            "condition must be one of ['clean', 'topic_shift', 'misleading_claim', "
+            "'random_insertion', 'adversarial']"
+        )
 
 
 def _split_sentences(text):
@@ -150,6 +162,35 @@ def _adversarial_insertion(texts, rng, tokenizer, model, device, insertion_len, 
     return ret
 
 
+def _sample_random_tokens(rng, vocab_size, n, exclude):
+    out = []
+    for _ in range(n):
+        tid = rng.randrange(vocab_size)
+        while tid in exclude:
+            tid = rng.randrange(vocab_size)
+        out.append(tid)
+    return out
+
+
+def _random_insertion(texts, rng, tokenizer, insertion_len, max_length):
+    """Uniform-random control for 'adversarial': splices a span of the same
+    length at the same midpoint position, but the inserted tokens are sampled
+    uniformly at random instead of HotFlip-optimized. Isolates whether
+    gradient-guided token choice matters, independent of splice location/length."""
+    exclude = {tid for tid in (tokenizer.pad_token_id, tokenizer.eos_token_id) if tid is not None}
+    ret = []
+    for text in texts:
+        base_ids = tokenizer(text, add_special_tokens=False)['input_ids']
+        keep_budget = max(1, max_length - insertion_len)
+        base_ids = base_ids[:keep_budget]
+
+        mid = len(base_ids) // 2
+        insertion_ids = _sample_random_tokens(rng, tokenizer.vocab_size, insertion_len, exclude)
+        combined = (base_ids[:mid] + insertion_ids + base_ids[mid:])[:max_length]
+        ret.append(tokenizer.decode(combined))
+    return ret
+
+
 # ---------------------------------------------------------------------------
 # Question-level perturbations
 # ---------------------------------------------------------------------------
@@ -163,11 +204,14 @@ def question_perturbation(texts, condition, rng, tokenizer, model=None, device=N
         return _clause_reorder(texts, rng)
     elif condition == 'negation_paraphrase':
         return _negation_paraphrase(texts, rng)
+    elif condition == 'random_swap':
+        return _random_swap(texts, rng, tokenizer, max_length)
     elif condition == 'adversarial_swap':
         return _adversarial_swap(texts, rng, tokenizer, model, device, max_length)
     else:
         raise ValueError(
-            "condition must be one of ['clean', 'synonym', 'reorder', 'negation_paraphrase', 'adversarial_swap']"
+            "condition must be one of ['clean', 'synonym', 'reorder', 'negation_paraphrase', "
+            "'random_swap', 'adversarial_swap']"
         )
 
 
@@ -274,6 +318,28 @@ def _negation_paraphrase(texts, rng):
                 applied = True
                 break
         ret.append(new_text if applied else text)
+    return ret
+
+
+def _random_swap(texts, rng, tokenizer, max_length, n_edits=20):
+    """Uniform-random control for 'adversarial_swap': the same number of context
+    positions get modified (up to n_edits, matching HotFlip's n_iters budget and
+    picked via the same shuffled-position order), but each replacement token is
+    sampled uniformly at random instead of gradient-selected."""
+    exclude = {tid for tid in (tokenizer.pad_token_id, tokenizer.eos_token_id) if tid is not None}
+    ret = []
+    for text in texts:
+        ids = tokenizer(text, add_special_tokens=False, truncation=True, max_length=max_length)['input_ids']
+        if len(ids) < 2:
+            ret.append(text)
+            continue
+
+        attack_order = list(range(len(ids)))
+        rng.shuffle(attack_order)
+        for pos in attack_order[:min(n_edits, len(ids))]:
+            [new_id] = _sample_random_tokens(rng, tokenizer.vocab_size, 1, exclude | {ids[pos]})
+            ids[pos] = new_id
+        ret.append(tokenizer.decode(ids))
     return ret
 
 

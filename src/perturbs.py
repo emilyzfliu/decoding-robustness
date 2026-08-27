@@ -5,6 +5,10 @@ Outside code should only ever call function `perturb`
 import re
 import string
 
+import torch
+
+from src.hotflip import hotflip_attack
+
 try:
     import nltk
     from nltk.corpus import wordnet as wn
@@ -40,7 +44,7 @@ PUNCT_TYPOS = {
 }
 
 
-def perturb(texts, perturb_pct, rng, ptb_type, tokenizer, model=None):
+def perturb(texts, perturb_pct, rng, ptb_type, tokenizer, model=None, device=None):
     if ptb_type == 'char':
         return character_substitution(texts, perturb_pct, rng)
     elif ptb_type == 'token':
@@ -55,8 +59,12 @@ def perturb(texts, perturb_pct, rng, ptb_type, tokenizer, model=None):
         return synonym_substitution(texts, perturb_pct, rng, tokenizer)
     elif ptb_type == 'adv':
         return adversarial_token_substitution(texts, perturb_pct, rng, tokenizer, model=model)
+    elif ptb_type == 'hotflip':
+        return hotflip_token_substitution(texts, perturb_pct, rng, tokenizer, model=model, device=device)
     else:
-        raise TypeError("ptb_type must be one of ['char', 'token', 'word', 'shuffle', 'typo', 'synonym', 'adv']")
+        raise TypeError(
+            "ptb_type must be one of ['char', 'token', 'word', 'shuffle', 'typo', 'synonym', 'adv', 'hotflip']"
+        )
     
 
 def character_substitution(texts, perturb_pct, rng):
@@ -357,4 +365,46 @@ def adversarial_token_substitution(texts, perturb_pct, rng, tokenizer, model=Non
             for j, tid in enumerate(ids)
         ]
         ret.append(tokenizer.decode(new_ids))
+    return ret
+
+
+def hotflip_token_substitution(texts, perturb_pct, rng, tokenizer, model=None, device=None,
+                                max_length=128, n_candidates=50):
+    """
+    Gradient-guided (HotFlip, src/hotflip.py) token substitution: picks
+    perturb_pct% of a sequence's positions (uniformly at random, same as
+    `token_substitution`'s expected edit count) and greedily replaces each one
+    with the vocabulary token that locally maximizes the model's own NLL,
+    verified via a real forward pass each step.
+
+    Matched control: `token_substitution` (ptb_type='token') at the same
+    perturb_pct — same expected number of edited positions, but the
+    replacement token is uniformly random instead of gradient-selected. The
+    two isolate whether *adversarially chosen* substitutions differ from
+    *equally-sized random* substitutions in their effect on the model's
+    internals (representations, not just output-level metrics).
+    """
+    if model is None:
+        raise ValueError("model is required for the 'hotflip' perturbation")
+    if device is None:
+        device = next(model.parameters()).device
+
+    encodings = tokenizer(texts, truncation=True, max_length=max_length, add_special_tokens=False)
+
+    ret = []
+    for input_ids in encodings['input_ids']:
+        n_tokens = len(input_ids)
+        if n_tokens < 2:
+            ret.append(tokenizer.decode(input_ids))
+            continue
+        n_to_replace = min(n_tokens, max(1, int(perturb_pct * n_tokens / 100)))
+
+        ids_tensor = torch.tensor(input_ids, dtype=torch.long)
+        attention_mask = torch.ones_like(ids_tensor)
+
+        attacked_ids = hotflip_attack(
+            model, tokenizer, ids_tensor, attention_mask, list(range(n_tokens)),
+            device, rng, n_candidates=n_candidates, n_iters=n_to_replace,
+        )
+        ret.append(tokenizer.decode(attacked_ids))
     return ret

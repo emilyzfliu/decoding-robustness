@@ -6,13 +6,15 @@ Two experiments, run independently or together:
 1. Context insertion (--experiment context_insertion): inject irrelevant /
    misleading / adversarially-optimized text into a passage; measure
    perplexity and next-token accuracy. Conditions: clean, topic_shift,
-   misleading_claim, adversarial.
+   misleading_claim, random_insertion, adversarial. random_insertion is a
+   uniform-random control matched to adversarial's splice span/length.
 
 2. Question-level perturbations (--experiment question_level): rephrase or
    adversarially attack a passage's context while holding out its final word,
    then check via loose substring match whether the model's greedy
    continuation contains that word. Conditions: clean, synonym, reorder,
-   negation_paraphrase, adversarial_swap.
+   negation_paraphrase, random_swap, adversarial_swap. random_swap is a
+   uniform-random control matched to adversarial_swap's edit positions/budget.
 
 See ADVERSARIAL_METHODOLOGY.md for caveats that apply to interpreting the
 results (in particular: the question-level task/metric mismatch for the
@@ -38,8 +40,8 @@ from config import MODEL_INFO
 from src.adversarial_perturbs import context_insertion, question_perturbation
 from src.eval import nll, next_token_accuracy, perplexity
 
-CONTEXT_CONDITIONS = ['clean', 'topic_shift', 'misleading_claim', 'adversarial']
-QUESTION_CONDITIONS = ['clean', 'synonym', 'reorder', 'negation_paraphrase', 'adversarial_swap']
+CONTEXT_CONDITIONS = ['clean', 'topic_shift', 'misleading_claim', 'random_insertion', 'adversarial']
+QUESTION_CONDITIONS = ['clean', 'synonym', 'reorder', 'negation_paraphrase', 'random_swap', 'adversarial_swap']
 
 
 def load_model_and_data(args):
