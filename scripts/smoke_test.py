@@ -5,7 +5,10 @@ output_hidden_states + output_attentions (as eval_loop does), reports peak VRAM.
 Usage: python smoke_test.py [--models gpt2,gpt2-xl]
 """
 import argparse
+import sys
 import time
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer

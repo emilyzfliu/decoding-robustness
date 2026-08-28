@@ -6,7 +6,7 @@ MODEL_INFO = {
         'attn_implementation': 'eager',
         'eval_hidden_states': True,
         'max_batch_size': 48,
-        'dtype': 'fp16'},
+        'dtype': 'fp32'},
     'gpt2-medium': {
         'model_name': 'openai-community/gpt2-medium',
         'num_layers': 24,

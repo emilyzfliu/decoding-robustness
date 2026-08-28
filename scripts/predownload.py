@@ -1,5 +1,9 @@
 """Pre-download model weights (no GPU needed). Usage: python predownload.py [--models ...]"""
 import argparse
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from config import MODEL_INFO, CROSS_MODEL_MODELS
