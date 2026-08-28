@@ -14,7 +14,7 @@ MODEL_INFO = {
         'attn_implementation': 'eager',
         'eval_hidden_states': True,
         'max_batch_size': 24,
-        'dtype': 'fp16'},
+        'dtype': 'fp32'},
     'gpt2-large': {
         'model_name': 'openai-community/gpt2-large',
         'num_layers': 36,
@@ -22,7 +22,7 @@ MODEL_INFO = {
         'attn_implementation': 'eager',
         'eval_hidden_states': True,
         'max_batch_size': 8,
-        'dtype': 'fp16'},
+        'dtype': 'fp32'},
     'gpt2-xl': {
         'model_name': 'openai-community/gpt2-xl',
         'num_layers': 48,
@@ -30,7 +30,7 @@ MODEL_INFO = {
         'attn_implementation': 'eager',
 'eval_hidden_states': True,
         'max_batch_size': 2,
-        'dtype': 'fp16'},
+        'dtype': 'fp32'},
     'qwen2.5_0.5b': {
         'model_name': 'Qwen/Qwen2.5-0.5B',
         'num_layers': 24,
@@ -38,7 +38,7 @@ MODEL_INFO = {
         'attn_implementation': 'eager',
         'eval_hidden_states': True,
         'max_batch_size': 32,
-        'dtype': 'fp16'},
+        'dtype': 'fp32'},
     'qwen2.5_1.5b': {
         'model_name': 'Qwen/Qwen2.5-1.5B',
         'num_layers': 28,
@@ -46,7 +46,7 @@ MODEL_INFO = {
         'attn_implementation': 'eager',
         'eval_hidden_states': True,
         'max_batch_size': 2,
-        'dtype': 'fp16'},
+        'dtype': 'fp32'},
     # Current 3b has bug
     'qwen2.5_3b': {
         'model_name': 'Qwen/Qwen2.5-3B',
@@ -93,6 +93,8 @@ MODEL_INFO = {
     }
 }
 
-# Models to run in the cross-model experiment (all that fit on an RTX 3050 4GB).
+# Models to run in the cross-model experiment. Originally sized to fit an RTX
+# 3050 4GB at fp16; all 6 are now fp32 (HotFlip needs precise gradients, and
+# fp32 no longer fits that budget) — run these on a GPU with real headroom.
 CROSS_MODEL_MODELS = ['gpt2', 'gpt2-medium', 'qwen2.5_0.5b',
                       'gpt2-large', 'qwen2.5_1.5b', 'gpt2-xl']
