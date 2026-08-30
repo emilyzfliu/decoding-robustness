@@ -1,16 +1,61 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
-import random 
+import random
 import argparse
+import json
 import os
+import subprocess
 import pandas as pd
+from datetime import datetime, timezone
 from tqdm import tqdm
 from time import time
 
 from src.perturbs import perturb
 from src.eval import eval_loop
 from config import MODEL_INFO
+
+
+def _git_commit():
+    try:
+        return subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'], cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        return None
+
+
+def write_manifest(pct_dir, args):
+    """Provenance for this results directory: what code/config produced it.
+    Overwritten each run -- meant to reflect the *latest* run, not history."""
+    manifest = {
+        'git_commit': _git_commit(),
+        'dtype': MODEL_INFO[args.model]['dtype'],
+        'seed': args.seed,
+        'n_candidates': args.n_candidates,
+        'cli_args': vars(args),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+    }
+    with open(f'{pct_dir}/meta.json', 'w') as f:
+        json.dump(manifest, f, indent=2)
+
+
+def write_texts_csv(pct_dir, texts, texts_perturbed, ptb_type, tokenizer, max_length=128):
+    """Original/perturbed text per sample, plus (for hotflip) the realized edit count
+    and positions -- none of this is derivable from evals.csv alone."""
+    rows = []
+    for i, (orig, pert) in enumerate(zip(texts, texts_perturbed)):
+        row = {'sample': i, 'original_text': orig, 'perturbed_text': pert}
+        if ptb_type == 'hotflip':
+            orig_ids = tokenizer(orig, add_special_tokens=False, truncation=True, max_length=max_length)['input_ids']
+            pert_ids = tokenizer(pert, add_special_tokens=False, truncation=True, max_length=max_length)['input_ids']
+            if len(orig_ids) == len(pert_ids):
+                changed = [j for j, (a, b) in enumerate(zip(orig_ids, pert_ids)) if a != b]
+                row['realized_edits'] = len(changed)
+                row['changed_positions'] = changed
+        rows.append(row)
+    pd.DataFrame(rows).to_csv(f'{pct_dir}/texts.csv', index=False)
 
 def run(args):
     start_time = time()
@@ -73,6 +118,10 @@ def run(args):
 
         pct_dir = f'{args.out_root}/{args.model}/{ptb_type}/{ptb_pct}{pct_dirname_suffix}'
         os.makedirs(pct_dir, exist_ok=True)
+
+        if not args.debug:
+            write_manifest(pct_dir, args)
+            write_texts_csv(pct_dir, texts, texts_perturbed, ptb_type, tokenizer)
 
         try:
             seen = set(pd.read_csv(f'{pct_dir}/evals.csv', usecols=['sample'])['sample'])
