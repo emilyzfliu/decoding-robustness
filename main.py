@@ -61,15 +61,21 @@ def run(args):
         else:
             ptb_pcts = [x*5 for x in range(1, 11)]
     
-    for ptb_pct in ptb_pcts:
-        
-        texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer, model=model, device=device)
+    # A non-default n_candidates only matters for hotflip, and changes the results it
+    # produces -- give it its own results directory so it never mixes with (or silently
+    # overwrites) the default-50 data already collected.
+    pct_dirname_suffix = f'_nc{args.n_candidates}' if (ptb_type == 'hotflip' and args.n_candidates != 50) else ''
 
-        os.makedirs(f'{args.out_root}/{args.model}/{ptb_type}/{ptb_pct}', exist_ok=True)
+    for ptb_pct in ptb_pcts:
+
+        texts_perturbed = perturb(texts, ptb_pct, rng, ptb_type, tokenizer, model=model, device=device,
+                                   n_candidates=args.n_candidates)
+
+        pct_dir = f'{args.out_root}/{args.model}/{ptb_type}/{ptb_pct}{pct_dirname_suffix}'
+        os.makedirs(pct_dir, exist_ok=True)
 
         try:
-            seen = set(pd.read_csv(f'{args.out_root}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv',
-                                   usecols=['sample'])['sample'])
+            seen = set(pd.read_csv(f'{pct_dir}/evals.csv', usecols=['sample'])['sample'])
         except:
             seen = set()
 
@@ -91,7 +97,7 @@ def run(args):
 
             res = res[~res['sample'].isin(seen)]
             if not args.debug:
-                res.to_csv(f'{args.out_root}/{args.model}/{ptb_type}/{ptb_pct}/evals.csv', 
+                res.to_csv(f'{pct_dir}/evals.csv',
                                         mode='a', header=(i==0 and len(seen) == 0), index=False, float_format='%.6f')
             else:
                 res.to_csv(f'{args.out_root}/{args.model}/debug.csv', mode='a', header=(i==0 and len(seen) == 0), index=False, float_format='%.6f')
@@ -110,6 +116,8 @@ if __name__ == "__main__":
     parser.add_argument("--n-samples", help="Number of sequences to sample (-1 = use all)", type=int, default=-1)
     parser.add_argument("--batch-size", help="Batch size (<=0 = per-model max_batch_size)", type=int, default=0)
     parser.add_argument("--out-root", help="Root directory for results (default: results)", type=str, default='results')
+    parser.add_argument("--n-candidates", help="HotFlip gradient-shortlist size (only affects ptb-type=hotflip); "
+                                                "non-default values get their own results dir suffix", type=int, default=50)
     parser.add_argument("--debug", action='store_true')
 
     args = parser.parse_args()

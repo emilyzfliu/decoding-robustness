@@ -44,7 +44,7 @@ PUNCT_TYPOS = {
 }
 
 
-def perturb(texts, perturb_pct, rng, ptb_type, tokenizer, model=None, device=None):
+def perturb(texts, perturb_pct, rng, ptb_type, tokenizer, model=None, device=None, n_candidates=50):
     if ptb_type == 'char':
         return character_substitution(texts, perturb_pct, rng)
     elif ptb_type == 'token':
@@ -60,7 +60,8 @@ def perturb(texts, perturb_pct, rng, ptb_type, tokenizer, model=None, device=Non
     elif ptb_type == 'adv':
         return adversarial_token_substitution(texts, perturb_pct, rng, tokenizer, model=model)
     elif ptb_type == 'hotflip':
-        return hotflip_token_substitution(texts, perturb_pct, rng, tokenizer, model=model, device=device)
+        return hotflip_token_substitution(texts, perturb_pct, rng, tokenizer, model=model, device=device,
+                                           n_candidates=n_candidates)
     else:
         raise TypeError(
             "ptb_type must be one of ['char', 'token', 'word', 'shuffle', 'typo', 'synonym', 'adv', 'hotflip']"

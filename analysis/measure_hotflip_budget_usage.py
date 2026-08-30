@@ -11,6 +11,8 @@ ceiling HotFlip actually gets in practice, for the appendix.
 Usage:
     python analysis/measure_hotflip_budget_usage.py --model gpt2 --pcts 5,30,50 --n-samples 30
     python analysis/measure_hotflip_budget_usage.py --model gpt2-xl --pcts 5,30,50 --n-samples 30 --out results_budget/gpt2-xl.csv
+    # n_candidates sensitivity sweep at a single pct:
+    python analysis/measure_hotflip_budget_usage.py --model gpt2 --pcts 30 --n-candidates 1,5,10,20,50,100 --n-samples 30
 """
 import argparse
 import random
@@ -83,37 +85,42 @@ def main():
     parser.add_argument('--model', default='gpt2')
     parser.add_argument('--pcts', default='5,30,50')
     parser.add_argument('--n-samples', type=int, default=30)
+    parser.add_argument('--n-candidates', default='50',
+                         help='Gradient-shortlist size per attacked position. Comma-separated for a '
+                              'sensitivity sweep, e.g. 1,5,10,20,50,100')
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--out', default=None, help='Optional path to write per-sample rows as CSV')
     args = parser.parse_args()
 
     pcts = [int(p) for p in args.pcts.split(',')]
+    n_candidates_list = [int(k) for k in args.n_candidates.split(',')]
     model, tokenizer, device, texts = load_model_and_texts(args.model, args.n_samples, seed=args.seed)
     print(f'{args.model}: {len(texts)} texts, device={device}')
 
     rows = []
     for pct in pcts:
-        t0 = time.time()
-        for i, text in enumerate(texts):
-            m = measure_one(text, pct, tokenizer, model, device)
-            if m is None:
-                continue
-            m.update({'model': args.model, 'pct': pct, 'sample': i})
-            rows.append(m)
-        dt = time.time() - t0
-        pct_rows = [r for r in rows if r['pct'] == pct]
-        mean_ratio = sum(r['ratio'] for r in pct_rows) / len(pct_rows)
-        hit_frac = sum(r['hit_ceiling'] for r in pct_rows) / len(pct_rows)
-        print(f'  pct={pct:3d}: mean realized/ceiling = {mean_ratio:.3f}, '
-              f'hit ceiling on {hit_frac*100:.1f}% of samples  ({dt:.1f}s)')
+        for n_cand in n_candidates_list:
+            t0 = time.time()
+            for i, text in enumerate(texts):
+                m = measure_one(text, pct, tokenizer, model, device, n_candidates=n_cand)
+                if m is None:
+                    continue
+                m.update({'model': args.model, 'pct': pct, 'n_candidates': n_cand, 'sample': i})
+                rows.append(m)
+            dt = time.time() - t0
+            grp_rows = [r for r in rows if r['pct'] == pct and r['n_candidates'] == n_cand]
+            mean_ratio = sum(r['ratio'] for r in grp_rows) / len(grp_rows)
+            hit_frac = sum(r['hit_ceiling'] for r in grp_rows) / len(grp_rows)
+            print(f'  pct={pct:3d} n_candidates={n_cand:4d}: mean realized/ceiling = {mean_ratio:.3f}, '
+                  f'hit ceiling on {hit_frac*100:.1f}% of samples  ({dt:.1f}s)')
 
     df = pd.DataFrame(rows)
     if args.out:
         df.to_csv(args.out, index=False)
         print(f'wrote {args.out}')
 
-    print('\nSummary by pct:')
-    summary = df.groupby('pct').agg(
+    print('\nSummary by (pct, n_candidates):')
+    summary = df.groupby(['pct', 'n_candidates']).agg(
         mean_ceiling=('ceiling', 'mean'),
         mean_realized=('realized', 'mean'),
         mean_ratio=('ratio', 'mean'),
