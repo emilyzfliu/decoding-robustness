@@ -71,12 +71,18 @@ def measure_one(text, pct, tokenizer, model, device, max_length=128, n_candidate
         device, rng, n_candidates=n_candidates, n_iters=n_to_replace,
     )
     realized = int((attacked_ids != ids_tensor).sum().item())
+    changed_positions = torch.nonzero(attacked_ids != ids_tensor, as_tuple=True)[0].tolist()
     return {
         'n_tokens': n_tokens,
         'ceiling': n_to_replace,
         'realized': realized,
         'ratio': realized / n_to_replace if n_to_replace else float('nan'),
         'hit_ceiling': realized == n_to_replace,
+        'original_text': text,
+        'perturbed_text': tokenizer.decode(attacked_ids),
+        'original_ids': input_ids_orig,
+        'perturbed_ids': attacked_ids.tolist(),
+        'changed_positions': changed_positions,
     }
 
 
