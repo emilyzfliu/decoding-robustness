@@ -47,13 +47,16 @@ def write_texts_csv(pct_dir, texts, texts_perturbed, ptb_type, tokenizer, max_le
     rows = []
     for i, (orig, pert) in enumerate(zip(texts, texts_perturbed)):
         row = {'sample': i, 'original_text': orig, 'perturbed_text': pert}
-        if ptb_type == 'hotflip':
-            orig_ids = tokenizer(orig, add_special_tokens=False, truncation=True, max_length=max_length)['input_ids']
-            pert_ids = tokenizer(pert, add_special_tokens=False, truncation=True, max_length=max_length)['input_ids']
-            if len(orig_ids) == len(pert_ids):
-                changed = [j for j, (a, b) in enumerate(zip(orig_ids, pert_ids)) if a != b]
-                row['realized_edits'] = len(changed)
-                row['changed_positions'] = changed
+        # Realized edit count is well-defined for any perturbation that preserves token
+        # count (hotflip, token, shuffle by construction) -- not for char/typo/word/synonym,
+        # which may shift token count under retokenization (same caveat CKA already has).
+        # Left blank rather than guessed at for those, rather than hardcoding by ptb_type.
+        orig_ids = tokenizer(orig, add_special_tokens=False, truncation=True, max_length=max_length)['input_ids']
+        pert_ids = tokenizer(pert, add_special_tokens=False, truncation=True, max_length=max_length)['input_ids']
+        if len(orig_ids) == len(pert_ids):
+            changed = [j for j, (a, b) in enumerate(zip(orig_ids, pert_ids)) if a != b]
+            row['n_tokens_changed'] = len(changed)
+            row['changed_positions'] = changed
         rows.append(row)
     pd.DataFrame(rows).to_csv(f'{pct_dir}/texts.csv', index=False)
 
