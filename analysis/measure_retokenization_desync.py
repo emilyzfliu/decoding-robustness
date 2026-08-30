@@ -12,6 +12,7 @@ since that's what RQ4 actually depends on.
 
 Usage:
     python analysis/measure_retokenization_desync.py --model gpt2 --ptb-type token --pct 30 --n-samples 100
+    python analysis/measure_retokenization_desync.py --model gpt2 --ptb-type shuffle --pct 30 --n-samples 100
     python analysis/measure_retokenization_desync.py --model gpt2 --ptb-type hotflip --pct 30 --n-samples 20
 """
 import argparse
@@ -35,6 +36,19 @@ def ground_truth_token_substitution(orig_ids, pct, rng, vocab_size):
     ]
 
 
+def ground_truth_shuffle(orig_ids, pct, rng):
+    """Mirrors token_shuffle's BPE-token-level logic exactly (src/perturbs.py)."""
+    n_tokens = len(orig_ids)
+    shuffle_window = max(1, int(pct * n_tokens / 100))
+    if pct < 100:
+        start = rng.randint(0, n_tokens - shuffle_window)
+    else:
+        start, shuffle_window = 0, n_tokens
+    window = list(orig_ids[start:start + shuffle_window])
+    rng.shuffle(window)
+    return list(orig_ids[:start]) + window + list(orig_ids[start + shuffle_window:])
+
+
 def ground_truth_hotflip(orig_ids, pct, rng, model, tokenizer, device, n_candidates=50):
     n_tokens = len(orig_ids)
     n_to_replace = min(n_tokens, max(1, int(pct * n_tokens / 100)))
@@ -50,7 +64,7 @@ def ground_truth_hotflip(orig_ids, pct, rng, model, tokenizer, device, n_candida
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', default='gpt2')
-    parser.add_argument('--ptb-type', default='token', choices=['token', 'hotflip'])
+    parser.add_argument('--ptb-type', default='token', choices=['token', 'shuffle', 'hotflip'])
     parser.add_argument('--pct', type=int, default=30)
     parser.add_argument('--n-samples', type=int, default=100)
     parser.add_argument('--seed', type=int, default=1)
@@ -94,6 +108,8 @@ def main():
 
         if args.ptb_type == 'token':
             new_ids = ground_truth_token_substitution(orig_ids, args.pct, rng, vocab_size)
+        elif args.ptb_type == 'shuffle':
+            new_ids = ground_truth_shuffle(orig_ids, args.pct, rng)
         else:
             new_ids = ground_truth_hotflip(orig_ids, args.pct, rng, model, tokenizer, device,
                                             n_candidates=args.n_candidates)
