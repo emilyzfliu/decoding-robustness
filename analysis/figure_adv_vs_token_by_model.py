@@ -25,6 +25,7 @@ from config import MODEL_INFO
 
 BASE = "/Users/niyathiallu/Desktop/ad_peturb-results_30"
 MODELS = ['gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl', 'qwen2.5_0.5b', 'qwen2.5_1.5b']
+N_SAMPLES = 300  # some dirs hold up to 748 cached samples; paper's reported numbers use the first 300
 METRICS = ['activation_cka', 'intrinsic_dim_change', 'intrinsic_dim_mknn_change']
 YLABELS = {'activation_cka': 'CKA', 'intrinsic_dim_change': 'Δ Intrinsic Dim (2NN)',
            'intrinsic_dim_mknn_change': 'Δ Intrinsic Dim (KNN-MLE)'}
@@ -47,7 +48,8 @@ def main():
     for m in MODELS:
         for ptb in ['hotflip', 'token']:
             path = f'{BASE}/{m}/{ptb}/30/evals.csv'
-            dfs[(m, ptb)] = pd.read_csv(path).drop_duplicates(subset='sample')
+            df = pd.read_csv(path).drop_duplicates(subset='sample')
+            dfs[(m, ptb)] = df[df['sample'] < N_SAMPLES]
 
     os.makedirs('figs_all/adv', exist_ok=True)
     for metric in METRICS:

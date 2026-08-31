@@ -19,28 +19,33 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 import pandas as pd
-import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 
 from config import MODEL_INFO
 
 BASE = "/Users/niyathiallu/Desktop/ad_peturb-results_30"
+N_SAMPLES = 300  # some dirs hold up to 748 cached samples; paper's reported numbers use the first 300
 MODEL_SERIES = {
     'gpt': ['gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'],
     'qwen': ['qwen2.5_0.5b', 'qwen2.5_1.5b'],
 }
-SERIES_BASE_COLOR = {'gpt': 'tab:blue', 'qwen': 'tab:orange'}
+# Okabe-Ito: colorblind-safe qualitative palette, one fully distinct hue per model
+# (not shades of a shared family hue -- with 6 series on one axes, shade steps within
+# a family were too close together to tell apart; a fixed distinct hue per model,
+# with linestyle carrying the Adversarial/Random-token distinction, reads far better).
+MODEL_COLOR = {
+    'gpt2': '#0072B2',           # blue
+    'gpt2-medium': '#E69F00',    # orange
+    'gpt2-large': '#009E73',     # green
+    'gpt2-xl': '#D55E00',        # vermillion
+    'qwen2.5_0.5b': '#CC79A7',   # pink
+    'qwen2.5_1.5b': '#5D3A9B',   # purple
+}
 METRICS = ['activation_cka', 'intrinsic_dim_change', 'intrinsic_dim_mknn_change']
 YLABELS = {'activation_cka': 'CKA', 'intrinsic_dim_change': 'Δ Intrinsic Dim (2NN)',
            'intrinsic_dim_mknn_change': 'Δ Intrinsic Dim (KNN-MLE)'}
 LABEL_FOR = {'hotflip': 'Adversarial', 'token': 'Random token'}
 LINESTYLE_FOR = {'hotflip': '-', 'token': '--'}
-
-
-def size_ordered_shades(base_color, n):
-    base = np.array(mcolors.to_rgb(base_color))
-    light = 0.5 + 0.5 * base
-    return np.linspace(light, base, n)
 
 
 def mean_std_n_across_layers(df, layers, metric):
@@ -59,14 +64,15 @@ def main():
         for m in series_models:
             for ptb in ['hotflip', 'token']:
                 path = f'{BASE}/{m}/{ptb}/30/evals.csv'
-                dfs[(m, ptb)] = pd.read_csv(path).drop_duplicates(subset='sample')
+                df = pd.read_csv(path).drop_duplicates(subset='sample')
+                dfs[(m, ptb)] = df[df['sample'] < N_SAMPLES]
 
     os.makedirs('figs_all/adv', exist_ok=True)
     for metric in METRICS:
         fig, ax = plt.subplots(1, 1, figsize=(9, 7))
         for series_name, models in MODEL_SERIES.items():
-            shades = size_ordered_shades(SERIES_BASE_COLOR[series_name], len(models))
-            for model, color in zip(models, shades):
+            for model in models:
+                color = MODEL_COLOR[model]
                 num_layers = MODEL_INFO[model]['num_layers']
                 layers = list(range(1, num_layers + 1))
                 layers_plt = [l / num_layers for l in layers]
@@ -75,8 +81,8 @@ def main():
                     ci = 1.96 * (std / np.sqrt(n))
                     label = f'{model} ({LABEL_FOR[ptb]})'
                     ax.plot(layers_plt, mean, linestyle=LINESTYLE_FOR[ptb], color=color,
-                             label=label, linewidth=1.6)
-                    ax.fill_between(layers_plt, mean - ci, mean + ci, alpha=0.10, color=color)
+                             label=label, linewidth=1.8)
+                    ax.fill_between(layers_plt, mean - ci, mean + ci, alpha=0.12, color=color)
 
         ax.set_xlabel('Layer Depth')
         ax.set_ylabel(YLABELS[metric])
