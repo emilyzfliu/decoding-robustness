@@ -4,4 +4,5 @@ results*
 .DS_Store
 __pycache__
 figures/
+figs_all/
 myenv
