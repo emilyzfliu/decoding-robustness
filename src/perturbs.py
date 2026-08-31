@@ -409,3 +409,78 @@ def hotflip_token_substitution(texts, perturb_pct, rng, tokenizer, model=None, d
         )
         ret.append(tokenizer.decode(attacked_ids))
     return ret
+
+
+def hotflip_and_coupled_random(texts, perturb_pct, rng, tokenizer, model=None, device=None,
+                                max_length=128, n_candidates=50):
+    """
+    Generates HotFlip's real attack AND its position-coupled random control
+    from ONE shared computation per text, returning both. This is the only
+    way to *guarantee* the random control touches exactly the same positions
+    HotFlip did: running them as two separate calls (even with the same seed)
+    lets their rng consumption drift apart after the first text, since this
+    control needs extra random draws (for the replacement token) that a plain
+    `hotflip_token_substitution` call doesn't make.
+
+    Unlike `token_substitution` (ptb_type='token'), an independent per-position
+    coin flip with no knowledge of what HotFlip did, the returned coupled
+    control has an identical edited-position set and edit count to the
+    HotFlip run alongside it -- isolating token *choice* (gradient-guided vs.
+    random) from edit *count and location*.
+
+    IMPORTANT: returns raw token ID lists (hotflip_ids, coupled_ids), NOT
+    decoded text, plus the decoded text separately for display/logging only.
+    The two ID lists are guaranteed position-aligned; a caller that decodes
+    both to text and re-tokenizes for eval loses that guarantee, since
+    different substituted tokens can trigger different BPE re-merging on
+    re-encode even at the "same" original positions (measured directly:
+    ~30 of ~97 changed positions silently diverged on one real sample when
+    routed through decode->re-encode). Eval must be built from these ID
+    lists directly (manual padding), never from `tokenizer(decoded_text)`.
+
+    Returns (base_ids, hotflip_ids, coupled_ids, hotflip_texts, coupled_texts),
+    all same length and sample order as `texts`. base_ids is the shared
+    (un-truncated-beyond-max_length) tokenization all three conditions
+    should build their model inputs from, so "clean" is byte-identical
+    across every condition too, not just hotflip/coupled matching each other.
+    """
+    if model is None:
+        raise ValueError("model is required for this perturbation")
+    if device is None:
+        device = next(model.parameters()).device
+
+    encodings = tokenizer(texts, truncation=True, max_length=max_length, add_special_tokens=False)
+    vocab_size = tokenizer.vocab_size
+    exclude = {tid for tid in (tokenizer.pad_token_id, tokenizer.eos_token_id) if tid is not None}
+
+    base_ids, hotflip_ids, coupled_ids = [], [], []
+    for input_ids in encodings['input_ids']:
+        base_ids.append(list(input_ids))
+        n_tokens = len(input_ids)
+        if n_tokens < 2:
+            hotflip_ids.append(list(input_ids))
+            coupled_ids.append(list(input_ids))
+            continue
+        n_to_replace = min(n_tokens, max(1, int(perturb_pct * n_tokens / 100)))
+
+        ids_tensor = torch.tensor(input_ids, dtype=torch.long)
+        attention_mask = torch.ones_like(ids_tensor)
+
+        attacked_ids = hotflip_attack(
+            model, tokenizer, ids_tensor, attention_mask, list(range(n_tokens)),
+            device, rng, n_candidates=n_candidates, n_iters=n_to_replace,
+        )
+        hotflip_ids.append(attacked_ids.tolist())
+
+        changed_positions = (attacked_ids != ids_tensor).nonzero(as_tuple=True)[0].tolist()
+        new_ids = list(input_ids)
+        for pos in changed_positions:
+            tid = rng.randrange(vocab_size)
+            while tid in exclude or tid == input_ids[pos]:
+                tid = rng.randrange(vocab_size)
+            new_ids[pos] = tid
+        coupled_ids.append(new_ids)
+
+    hotflip_texts = [tokenizer.decode(ids) for ids in hotflip_ids]
+    coupled_texts = [tokenizer.decode(ids) for ids in coupled_ids]
+    return base_ids, hotflip_ids, coupled_ids, hotflip_texts, coupled_texts
