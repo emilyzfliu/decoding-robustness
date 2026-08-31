@@ -8,8 +8,10 @@
 # Run from the repo root, e.g. on a RunPod GPU instance:
 #   bash scripts/paired_hotflip_sweep.sh
 #
-# Override the percentage or sample count via env vars:
+# Override the percentage, sample count, or model list via env vars
+# (MODELS is space-separated and overrides config.CROSS_MODEL_MODELS entirely):
 #   PTB_PCT=30 N_SAMPLES=300 bash scripts/paired_hotflip_sweep.sh
+#   MODELS="gpt2 gpt2-medium gpt2-large qwen2.5_0.5b" bash scripts/paired_hotflip_sweep.sh
 #
 # NOTE on resume: same rationale as hotflip_vs_token_sweep.sh -- a single
 # run_paired_hotflip.py invocation always regenerates the full attack for
@@ -26,7 +28,7 @@ N_SAMPLES=${N_SAMPLES:-300}
 
 cd "$(dirname "$0")/.."
 
-MODELS=$(python3 -c "from config import CROSS_MODEL_MODELS; print(' '.join(CROSS_MODEL_MODELS))")
+MODELS=${MODELS:-$(python3 -c "from config import CROSS_MODEL_MODELS; print(' '.join(CROSS_MODEL_MODELS))")}
 
 is_complete() {
     # $1 = path to evals.csv
